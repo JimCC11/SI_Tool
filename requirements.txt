@@ -1,0 +1,6 @@
+streamlit
+scikit-rf
+plotly
+numpy
+kaleido
+python-pptx

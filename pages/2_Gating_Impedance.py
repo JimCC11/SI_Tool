@@ -93,6 +93,10 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.height          = 7.5
         ch.title           = _rich_title(title_text, sz=2400)
         ch.legend.position = "r"
+        # plot area: white fill, no border
+        pa_spPr = GraphicalProperties(solidFill="FFFFFF")
+        pa_spPr.ln = LineProperties(noFill=True)
+        ch.plot_area.spPr = pa_spPr
         # x axis
         ch.x_axis.title           = _rich_title(x_title, sz=2000)
         ch.x_axis.crossBetween    = "midCat"

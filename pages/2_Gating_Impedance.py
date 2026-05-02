@@ -35,6 +35,42 @@ _BL = dict(color="#888888", width=1)
 _EPS = 1e-9
 
 
+def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
+    """Post-process xlsx: inject spPr (solid bg1 fill + no border) into each chart's chartSpace."""
+    import zipfile
+    from lxml import etree
+
+    NS_C = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
+    NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
+    def _chart_area_sppr():
+        spPr = etree.Element(f'{{{NS_C}}}spPr')
+        sf = etree.SubElement(spPr, f'{{{NS_A}}}solidFill')
+        etree.SubElement(sf, f'{{{NS_A}}}schemeClr').set('val', 'bg1')
+        ln = etree.SubElement(spPr, f'{{{NS_A}}}ln')
+        ln.set('w', '9525'); ln.set('cap', 'flat'); ln.set('cmpd', 'sng'); ln.set('algn', 'ctr')
+        etree.SubElement(ln, f'{{{NS_A}}}noFill')
+        etree.SubElement(ln, f'{{{NS_A}}}round')
+        etree.SubElement(spPr, f'{{{NS_A}}}effectLst')
+        return spPr
+
+    buf_in  = io.BytesIO(xlsx_bytes)
+    buf_out = io.BytesIO()
+    with zipfile.ZipFile(buf_in, 'r') as zin, \
+         zipfile.ZipFile(buf_out, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.startswith('xl/charts/chart') and item.filename.endswith('.xml'):
+                root = etree.fromstring(data)
+                if root.find(f'{{{NS_C}}}spPr') is None:
+                    root.append(_chart_area_sppr())
+                data = etree.tostring(root, xml_declaration=True,
+                                      encoding='UTF-8', standalone=True)
+            zout.writestr(item, data)
+    buf_out.seek(0)
+    return buf_out.read()
+
+
 def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
                 z_min=70, z_max=120, rl_min=-80) -> bytes:
     from openpyxl import Workbook
@@ -142,7 +178,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf.read()
+    return _patch_chart_sppr(buf.read())
 
 
 def _baseline_correct(t: np.ndarray, z_gated: np.ndarray, z_orig: np.ndarray,

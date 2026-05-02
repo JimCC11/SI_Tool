@@ -74,6 +74,23 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
         etree.SubElement(spPr, f'{{{NS_A}}}effectLst')
         return spPr
 
+    def _legend_txpr():
+        """Legend txPr: Arial 16pt."""
+        txPr = etree.Element(f'{{{NS_C}}}txPr')
+        bodyPr = etree.SubElement(txPr, f'{{{NS_A}}}bodyPr')
+        bodyPr.set('rot', '0'); bodyPr.set('spcFirstLastPara', '1')
+        bodyPr.set('vertOverflow', 'ellipsis'); bodyPr.set('vert', 'horz')
+        bodyPr.set('wrap', 'square'); bodyPr.set('anchor', 'ctr'); bodyPr.set('anchorCtr', '1')
+        etree.SubElement(txPr, f'{{{NS_A}}}lstStyle')
+        p = etree.SubElement(txPr, f'{{{NS_A}}}p')
+        pPr = etree.SubElement(p, f'{{{NS_A}}}pPr')
+        defRPr = etree.SubElement(pPr, f'{{{NS_A}}}defRPr')
+        defRPr.set('sz', '1600'); defRPr.set('b', '0'); defRPr.set('i', '0')
+        defRPr.set('u', 'none'); defRPr.set('strike', 'noStrike')
+        defRPr.set('kern', '1200'); defRPr.set('baseline', '0')
+        etree.SubElement(defRPr, f'{{{NS_A}}}latin').set('typeface', 'Arial')
+        return txPr
+
     def _axis_txpr():
         """Tick label txPr: Arial 16pt, matching reference file."""
         txPr = etree.Element(f'{{{NS_C}}}txPr')
@@ -112,6 +129,10 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
                 for ax in root.findall(f'.//{{{NS_C}}}valAx'):
                     if ax.find(f'{{{NS_C}}}txPr') is None:
                         ax.append(_axis_txpr())
+                # legend font Arial 16pt
+                legend = root.find(f'.//{{{NS_C}}}legend')
+                if legend is not None and legend.find(f'{{{NS_C}}}txPr') is None:
+                    legend.append(_legend_txpr())
                 data = etree.tostring(root, xml_declaration=True,
                                       encoding='UTF-8', standalone=True)
             zout.writestr(item, data)

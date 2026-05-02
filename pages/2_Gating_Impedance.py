@@ -36,7 +36,7 @@ _EPS = 1e-9
 
 
 def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
-    """Post-process xlsx: inject spPr (solid bg1 fill + no border) into each chart's chartSpace."""
+    """Post-process xlsx: inject chart area spPr + plot area manualLayout into each chart."""
     import zipfile
     from lxml import etree
 
@@ -54,6 +54,15 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
         etree.SubElement(spPr, f'{{{NS_A}}}effectLst')
         return spPr
 
+    def _plot_area_layout():
+        layout = etree.Element(f'{{{NS_C}}}layout')
+        ml = etree.SubElement(layout, f'{{{NS_C}}}manualLayout')
+        for tag, val in [('layoutTarget', 'inner'), ('xMode', 'edge'), ('yMode', 'edge'),
+                         ('x', '0.10992255198869372'), ('y', '0.10568893876292018'),
+                         ('w', '0.83791986001749785'), ('h', '0.75324590629372912')]:
+            etree.SubElement(ml, f'{{{NS_C}}}{tag}').set('val', val)
+        return layout
+
     buf_in  = io.BytesIO(xlsx_bytes)
     buf_out = io.BytesIO()
     with zipfile.ZipFile(buf_in, 'r') as zin, \
@@ -62,8 +71,13 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
             data = zin.read(item.filename)
             if item.filename.startswith('xl/charts/chart') and item.filename.endswith('.xml'):
                 root = etree.fromstring(data)
+                # chart area spPr
                 if root.find(f'{{{NS_C}}}spPr') is None:
                     root.append(_chart_area_sppr())
+                # plot area manualLayout
+                pa = root.find(f'.//{{{NS_C}}}plotArea')
+                if pa is not None and pa.find(f'{{{NS_C}}}layout') is None:
+                    pa.insert(0, _plot_area_layout())
                 data = etree.tostring(root, xml_declaration=True,
                                       encoding='UTF-8', standalone=True)
             zout.writestr(item, data)

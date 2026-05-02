@@ -170,7 +170,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         s.marker.symbol = "none"
         return s
 
-    def _make_chart(title_text, x_title, y_title, y_min, y_max, x_crosses_at=None):
+    def _make_chart(title_text, x_title, y_title, y_min, y_max, x_crosses_at=None, x_minor_tick="in"):
         ch = ScatterChart()
         ch.scatterStyle    = "smoothMarker"
         ch.width           = 15
@@ -184,7 +184,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.x_axis.numFmt          = NumFmt(formatCode='General', sourceLinked=True)
         ch.x_axis.delete          = False
         ch.x_axis.majorGridlines  = _gridlines(9525, 'tx1', lumMod=15000, lumOff=85000)
-        ch.x_axis.minorTickMark   = "out"
+        ch.x_axis.minorTickMark   = x_minor_tick
         if x_crosses_at is not None:
             ch.x_axis.crossesAt = float(x_crosses_at)
         # y axis
@@ -208,7 +208,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ws_rl.append([round(float(f), 6), round(float(ro), 4), round(float(rg), 4)])
     n_rl = len(rl_freq)
     ch_rl = _make_chart("Return Loss", "Frequency [GHz]", "Magnitude [dB]", rl_min, 0,
-                        x_crosses_at=rl_min)
+                        x_crosses_at=rl_min, x_minor_tick="out")
     ch_rl.series.append(_make_series(ws_rl, 1, 2, n_rl, 'accent1'))
     ch_rl.series.append(_make_series(ws_rl, 1, 3, n_rl, 'accent2'))
     wb.create_chartsheet("Chart1").add_chart(ch_rl)

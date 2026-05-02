@@ -63,6 +63,17 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
             etree.SubElement(ml, f'{{{NS_C}}}{tag}').set('val', val)
         return layout
 
+    def _plot_area_sppr():
+        """plotArea spPr: white fill + solid tx1 border."""
+        spPr = etree.Element(f'{{{NS_C}}}spPr')
+        sf = etree.SubElement(spPr, f'{{{NS_A}}}solidFill')
+        etree.SubElement(sf, f'{{{NS_A}}}schemeClr').set('val', 'bg1')
+        ln = etree.SubElement(spPr, f'{{{NS_A}}}ln')
+        ln_sf = etree.SubElement(ln, f'{{{NS_A}}}solidFill')
+        etree.SubElement(ln_sf, f'{{{NS_A}}}schemeClr').set('val', 'tx1')
+        etree.SubElement(spPr, f'{{{NS_A}}}effectLst')
+        return spPr
+
     def _axis_txpr():
         """Tick label txPr: Arial 16pt, matching reference file."""
         txPr = etree.Element(f'{{{NS_C}}}txPr')
@@ -91,10 +102,12 @@ def _patch_chart_sppr(xlsx_bytes: bytes) -> bytes:
                 # chart area spPr
                 if root.find(f'{{{NS_C}}}spPr') is None:
                     root.append(_chart_area_sppr())
-                # plot area manualLayout
+                # plot area: manualLayout + spPr
                 pa = root.find(f'.//{{{NS_C}}}plotArea')
                 if pa is not None and pa.find(f'{{{NS_C}}}layout') is None:
                     pa.insert(0, _plot_area_layout())
+                if pa is not None and pa.find(f'{{{NS_C}}}spPr') is None:
+                    pa.append(_plot_area_sppr())
                 # axis tick label font size (sz=1600)
                 for ax in root.findall(f'.//{{{NS_C}}}valAx'):
                     if ax.find(f'{{{NS_C}}}txPr') is None:
@@ -165,10 +178,6 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.title           = _rich_title(title_text, sz=2400)
         ch.legend.position = "r"
         ch.roundedCorners = False
-        # plot area: white fill, no border
-        pa_spPr = GraphicalProperties(solidFill="FFFFFF")
-        pa_spPr.ln = LineProperties(noFill=True)
-        ch.plot_area.spPr = pa_spPr
         # x axis
         ch.x_axis.title           = _rich_title(x_title, sz=2000)
         ch.x_axis.crossBetween    = "midCat"

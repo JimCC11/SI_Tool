@@ -271,8 +271,8 @@ def _baseline_correct(t: np.ndarray, z_gated: np.ndarray, z_orig: np.ndarray,
 with st.sidebar:
     st.header("設定")
 
-    src = st.radio("資料來源", ["VNA (S4P/S16P)", "TDR CSV"], horizontal=True, key="gi_src")
-    vna_mode = src.startswith("VNA")
+    src = st.radio("資料來源", ["S-parameter", "CSV file"], horizontal=True, key="gi_src")
+    vna_mode = src == "S-parameter"
 
     # ── VNA mode ──
     if vna_mode:

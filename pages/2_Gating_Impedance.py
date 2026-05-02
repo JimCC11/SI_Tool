@@ -184,6 +184,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.x_axis.numFmt          = NumFmt(formatCode='General', sourceLinked=True)
         ch.x_axis.delete          = False
         ch.x_axis.majorGridlines  = _gridlines(9525, 'tx1', lumMod=15000, lumOff=85000)
+        ch.x_axis.majorTickMark   = "none"
         ch.x_axis.minorTickMark   = x_minor_tick
         if x_crosses_at is not None:
             ch.x_axis.crossesAt = float(x_crosses_at)
@@ -193,7 +194,8 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.y_axis.numFmt          = NumFmt(formatCode='General', sourceLinked=True)
         ch.y_axis.delete          = False
         ch.y_axis.majorGridlines  = _gridlines(6350, 'bg2', lumMod=75000)
-        ch.y_axis.minorTickMark   = "out"
+        ch.y_axis.majorTickMark   = "none"
+        ch.y_axis.minorTickMark   = "in"
         ch.y_axis.scaling.min     = float(y_min)
         ch.y_axis.scaling.max     = float(y_max)
         return ch

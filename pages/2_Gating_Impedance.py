@@ -45,7 +45,6 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
     from openpyxl.chart.text import RichText, Text
     from openpyxl.chart.title import Title
     from openpyxl.drawing.colors import ColorChoice, SchemeColor
-    from openpyxl.drawing.geometry import PresetGeometry2D
     from openpyxl.drawing.line import LineProperties
     from openpyxl.drawing.text import (CharacterProperties, Font as DFont,
                                         Paragraph, ParagraphProperties,
@@ -94,11 +93,7 @@ def _build_xlsx(rl_freq, rl_orig, rl_gated, imp_time, imp_orig, imp_gated,
         ch.height          = 7.5
         ch.title           = _rich_title(title_text, sz=2400)
         ch.legend.position = "r"
-        # chart area: rect shape (remove rounded corners), white fill, no border
-        ca_spPr = GraphicalProperties(solidFill="FFFFFF")
-        ca_spPr.prstGeom = PresetGeometry2D(prst="rect")
-        ca_spPr.ln = LineProperties(noFill=True)
-        ch.spPr = ca_spPr
+        ch.roundedCorners = False
         # plot area: white fill, no border
         pa_spPr = GraphicalProperties(solidFill="FFFFFF")
         pa_spPr.ln = LineProperties(noFill=True)

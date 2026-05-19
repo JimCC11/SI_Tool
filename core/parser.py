@@ -23,3 +23,8 @@ def get_frequency_ghz(network: rf.Network) -> np.ndarray:
 def get_smatrix(network: rf.Network) -> np.ndarray:
     """回傳 S-parameter 矩陣，shape: [freq, 4, 4]"""
     return network.s
+
+
+def get_port_z0(network: rf.Network) -> float:
+    """回傳單端 port 參考阻抗（從 Touchstone 檔案讀取）。"""
+    return float(np.real(network.z0[0, 0]))

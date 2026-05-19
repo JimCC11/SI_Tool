@@ -10,7 +10,7 @@ import streamlit as st
 from core.gating import apply_time_gate, compute_tdr_gated, gate_tdr_csv
 from core.impedance import compute_tdr
 from core.mixed_mode import single_to_mixed_mode, single_to_mixed_mode_npairs
-from core.parser import get_frequency_ghz, get_smatrix, load_s4p, load_s16p
+from core.parser import get_frequency_ghz, get_port_z0, get_smatrix, load_s4p, load_s16p
 
 st.set_page_config(page_title="Gating Impedance", layout="wide")
 st.title("SI Tool — Gating Impedance")
@@ -343,6 +343,9 @@ if vna_mode:
             s_mm  = single_to_mixed_mode_npairs(get_smatrix(nw), n_pairs=4, mapping='A')
             sdd11 = s_mm[:, 4 * pair_idx, 4 * pair_idx]
 
+        z0_se   = get_port_z0(nw)
+        z0_diff = 2.0 * z0_se
+
         os.unlink(tmp)
         freq_ghz = get_frequency_ghz(nw)
         freqs_hz = freq_ghz * 1e9
@@ -356,16 +359,18 @@ if vna_mode:
         sdd11, freqs_hz, t_start, t_stop,
         rise_frac=rise_frac, exclude=exclude, strength=strength,
     )
-    t_ps_o, z_o = compute_tdr(sdd11, freqs_hz, z0=100.0, rise_time_ps=float(rise_ps))
+    t_ps_o, z_o = compute_tdr(sdd11, freqs_hz, z0=z0_diff, rise_time_ps=float(rise_ps))
     t_ns_o = t_ps_o / 1000
 
     t_ps_g, z_g, t_ns_g, _ = compute_tdr_gated(
         sdd11, freqs_hz, t_start, t_stop,
-        z0=100.0, rise_time_ps=float(rise_ps),
+        z0=z0_diff, rise_time_ps=float(rise_ps),
         rise_frac=rise_frac, exclude=exclude, strength=strength,
     )
 
-    z_g = _baseline_correct(t_ns_g, z_g, z_o, t_stop, z0=100.0)
+    z_g = _baseline_correct(t_ns_g, z_g, z_o, t_stop, z0=z0_diff)
+
+    st.caption(f"偵測到 reference Z0 = {z0_se:.1f} Ω（單端），差分 Z0_diff = {z0_diff:.1f} Ω")
 
     rl_o = 20 * np.log10(np.abs(sdd11)       + 1e-15)
     rl_g = 20 * np.log10(np.abs(sdd11_gated) + 1e-15)

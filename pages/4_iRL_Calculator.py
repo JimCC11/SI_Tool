@@ -201,10 +201,13 @@ with st.sidebar:
 
 
 # ── Plot helpers ──────────────────────────────────────────────────────────────
-def _fig_w(freq_ghz, w, ft_g, fr_g):
+def _fig_w(freq_ghz, w, ft_g, fr_g, fb_hz, tr_s, nyquist_factor):
+    # compute W(f) on a dense grid 0~fr, independent of file frequency range
+    f_dense = np.linspace(0, fr_g * 1e9, 2000)
+    w_dense = weighting_function(f_dense, fb_hz, tr_s, nyquist_factor)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=freq_ghz, y=w, name="W(f)", line=dict(color=_FILE_COLORS[0][0]),
+        x=f_dense / 1e9, y=w_dense, name="W(f)", line=dict(color=_FILE_COLORS[0][0]),
         fill="tozeroy", fillcolor="rgba(37,99,235,0.08)",
     ))
     fig.add_vline(x=ft_g, line=dict(color=_FILE_COLORS[0][1], dash="dash", width=1.5))
@@ -321,7 +324,7 @@ if vna_mode:
                  "sdd11": r["sdd11"], "sdd22": r["sdd22"], "label": r["label"]}
                 for r in results]
     st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
-    st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz),
+    st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz, fb_hz, tr_s, nyquist_factor),
                     use_container_width=True)
     st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
 
@@ -359,5 +362,5 @@ else:
     datasets = [{"freq_ghz": freq_ghz, "rl_avg": rl_avg,
                  "sdd11": rl11_lin, "sdd22": rl22_lin, "label": uploaded_csv.name}]
     st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
-    st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz), use_container_width=True)
+    st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz, fb_hz, tr_s, nyquist_factor), use_container_width=True)
     st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)

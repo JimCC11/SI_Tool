@@ -181,9 +181,6 @@ with st.sidebar:
 </table>
 """, unsafe_allow_html=True)
 
-    st.divider()
-    st.subheader("Gate 設定")
-    st.caption("（功能開發中）")
 
 
 # ── Plot helpers ──────────────────────────────────────────────────────────────

@@ -185,64 +185,71 @@ with st.sidebar:
 
 # ── Plot helpers ──────────────────────────────────────────────────────────────
 def _fig_w(freq_ghz, w, ft_g, fr_g):
-    f_max = float(freq_ghz[-1])
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=freq_ghz, y=w, name="W(f)", line=dict(color="#2563eb"),
         fill="tozeroy", fillcolor="rgba(37,99,235,0.08)",
     ))
-    # shade excluded region (fr ~ f_max)
-    if fr_g < f_max:
-        fig.add_vrect(x0=fr_g, x1=f_max,
-                      fillcolor="rgba(160,160,160,0.18)", layer="below", line_width=0)
-        fig.add_annotation(x=(fr_g + f_max) / 2, y=0.5, yref="paper",
-                           text="計算範圍外", showarrow=False,
-                           font=dict(color="#888", size=12))
-    for xv, label, color in [(ft_g, f"ft={ft_g:.2f}", "#dc2626"),
-                              (fr_g, f"fr={fr_g:.2f} (上限)", "#16a34a")]:
-        if xv <= f_max:
-            fig.add_vline(x=xv, line=dict(color=color, dash="dash", width=1.5))
-            fig.add_annotation(x=xv, y=1.02, yref="paper", text=label,
-                               showarrow=False, font=dict(color=color, size=13))
-    fig.add_vline(x=0,     line=_BL)
-    fig.add_vline(x=f_max, line=_BL)
+    fig.add_vline(x=ft_g, line=dict(color="#dc2626", dash="dash", width=1.5))
+    fig.add_annotation(x=ft_g, y=0.97, yref="paper", text=f"ft={ft_g:.2f}",
+                       showarrow=False, font=dict(color="#dc2626", size=13),
+                       xanchor="left")
+    fig.add_vline(x=0,    line=_BL)
+    fig.add_vline(x=fr_g, line=_BL)
     fig.update_layout(
         title=dict(text="Weighting Function W(f)", x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="W(f)",
-        xaxis=dict(**_AX, range=[0 - _EPS, f_max + _EPS]),
+        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
         yaxis=dict(**_AX, range=[-_EPS, 1.05]),
         **_LY,
     )
     return fig
 
 
-def _fig_rl(datasets, ft_g, fr_g):
-    f_max = max(float(d["freq_ghz"][-1]) for d in datasets)
-    fig   = go.Figure()
-    # shade excluded region
-    if fr_g < f_max:
-        fig.add_vrect(x0=fr_g, x1=f_max,
-                      fillcolor="rgba(160,160,160,0.18)", layer="below", line_width=0)
+def _fig_sdd(datasets, fr_g):
+    fig = go.Figure()
     for i, d in enumerate(datasets):
-        clr = _COLORS[i % len(_COLORS)]
-        rl_db = 20 * np.log10(d["rl_avg"] + 1e-15)
-        fig.add_trace(go.Scatter(
-            x=d["freq_ghz"], y=rl_db, name=d["label"],
-            line=dict(color=clr),
-        ))
-    for xv, label, color in [(ft_g, f"ft={ft_g:.2f}", "#dc2626"),
-                              (fr_g, f"fr={fr_g:.2f} (上限)", "#16a34a")]:
-        if xv <= f_max:
-            fig.add_vline(x=xv, line=dict(color=color, dash="dash", width=1.5))
-            fig.add_annotation(x=xv, y=1.02, yref="paper", text=label,
-                               showarrow=False, font=dict(color=color, size=13))
+        clr   = _COLORS[i % len(_COLORS)]
+        label = d["label"]
+        rl11  = 20 * np.log10(np.abs(d["sdd11"]) + 1e-15)
+        rl22  = 20 * np.log10(np.abs(d["sdd22"]) + 1e-15)
+        fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl11,
+                                  name=f"{label} RL11",
+                                  line=dict(color=clr)))
+        fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl22,
+                                  name=f"{label} RL22",
+                                  line=dict(color=clr, dash="dash")))
     fig.add_hline(y=0, line=_BL)
-    fig.add_vline(x=0,     line=_BL)
-    fig.add_vline(x=f_max, line=_BL)
+    fig.add_vline(x=0,    line=_BL)
+    fig.add_vline(x=fr_g, line=_BL)
+    fig.update_layout(
+        title=dict(text="SDD11 & SDD22", x=0.5, xanchor="center", pad=dict(t=20)),
+        xaxis_title="Frequency (GHz)", yaxis_title="Magnitude (dB)",
+        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
+        yaxis=dict(**_AX),
+        **_LY,
+    )
+    return fig
+
+
+def _fig_rl(datasets, ft_g, fr_g):
+    fig = go.Figure()
+    for i, d in enumerate(datasets):
+        clr   = _COLORS[i % len(_COLORS)]
+        rl_db = 20 * np.log10(d["rl_avg"] + 1e-15)
+        fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl_db,
+                                  name=d["label"], line=dict(color=clr)))
+    fig.add_vline(x=ft_g, line=dict(color="#dc2626", dash="dash", width=1.5))
+    fig.add_annotation(x=ft_g, y=0.97, yref="paper", text=f"ft={ft_g:.2f}",
+                       showarrow=False, font=dict(color="#dc2626", size=13),
+                       xanchor="left")
+    fig.add_hline(y=0, line=_BL)
+    fig.add_vline(x=0,    line=_BL)
+    fig.add_vline(x=fr_g, line=_BL)
     fig.update_layout(
         title=dict(text="RL_avg(f) = (|RL₁₁| + |RL₂₂|) / 2", x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="Magnitude (dB)",
-        xaxis=dict(**_AX, range=[0 - _EPS, f_max + _EPS]),
+        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
         yaxis=dict(**_AX),
         **_LY,
     )
@@ -291,13 +298,16 @@ if vna_mode:
         st.dataframe(df_tbl, use_container_width=True, hide_index=True)
 
     # ── 圖表 ──
-    col1, col2 = st.columns(2)
+    datasets = [{"freq_ghz": r["freq_ghz"], "rl_avg": r["rl_avg"],
+                 "sdd11": r["sdd11"], "sdd22": r["sdd22"], "label": r["label"]}
+                for r in results]
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz),
                         use_container_width=True)
     with col2:
-        datasets = [{"freq_ghz": r["freq_ghz"], "rl_avg": r["rl_avg"], "label": r["label"]}
-                    for r in results]
+        st.plotly_chart(_fig_sdd(datasets, fr_ghz), use_container_width=True)
+    with col3:
         st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -331,9 +341,12 @@ else:
     st.metric(uploaded_csv.name, f"{irl_db:.2f} dB")
 
     # ── 圖表 ──
-    col1, col2 = st.columns(2)
+    datasets = [{"freq_ghz": freq_ghz, "rl_avg": rl_avg,
+                 "sdd11": rl11_lin, "sdd22": rl22_lin, "label": uploaded_csv.name}]
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz), use_container_width=True)
     with col2:
-        datasets = [{"freq_ghz": freq_ghz, "rl_avg": rl_avg, "label": uploaded_csv.name}]
+        st.plotly_chart(_fig_sdd(datasets, fr_ghz), use_container_width=True)
+    with col3:
         st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)

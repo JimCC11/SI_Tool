@@ -13,19 +13,36 @@ from core.parser import get_frequency_ghz, load_snp
 st.set_page_config(page_title="iRL Calculator", layout="wide")
 st.title("SI Tool — iRL Calculator")
 
-_AX = dict(showgrid=True, gridcolor="#888888", gridwidth=1, showline=False,
-           mirror=False, zeroline=False,
-           title_font=dict(size=20, family="Arial"), tickfont=dict(size=16, family="Arial"))
-_LY = dict(hovermode="x unified", font=dict(size=16, family="Arial"),
-           title_font=dict(size=22, family="Arial"),
-           legend=dict(orientation="v", yanchor="bottom", y=0.02, xanchor="right", x=0.98,
-                       font=dict(size=16, family="Arial")),
-           margin=dict(t=42, b=58, l=60, r=20),
-           plot_bgcolor="#ffffff", paper_bgcolor="#ffffff")
+_AXIS_BASE = dict(
+    showgrid=True, gridcolor="#888888", gridwidth=1,
+    showline=False, mirror=False, zeroline=False,
+    title_font=dict(size=20, family="Arial"),
+    tickfont=dict(size=16, family="Arial"),
+)
+_LAYOUT = dict(
+    hovermode="x unified", font=dict(size=16, family="Arial"),
+    title_font=dict(size=22, family="Arial"),
+    legend=dict(orientation="v", yanchor="bottom", y=0.02, xanchor="right", x=0.98,
+                font=dict(size=16, family="Arial")),
+    margin=dict(t=42, b=58, l=60, r=20),
+    plot_bgcolor="#ffffff", paper_bgcolor="#ffffff",
+)
 _BL  = dict(color="#888888", width=1)
 _EPS = 1e-9
-_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706",
-           "#7c3aed", "#0891b2", "#be185d", "#059669"]
+_FILE_COLORS = [
+    ("#2563eb", "#dc2626"),
+    ("#16a34a", "#d97706"),
+    ("#7c3aed", "#0891b2"),
+    ("#be185d", "#854d0e"),
+]
+
+
+def _xax(**kw) -> dict:
+    return {**_AXIS_BASE, "title": dict(standoff=5), **kw}
+
+
+def _yax(**kw) -> dict:
+    return {**_AXIS_BASE, **kw}
 
 _TABLE_STYLE = """
 <style>
@@ -187,49 +204,46 @@ with st.sidebar:
 def _fig_w(freq_ghz, w, ft_g, fr_g):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=freq_ghz, y=w, name="W(f)", line=dict(color="#2563eb"),
+        x=freq_ghz, y=w, name="W(f)", line=dict(color=_FILE_COLORS[0][0]),
         fill="tozeroy", fillcolor="rgba(37,99,235,0.08)",
     ))
-    fig.add_vline(x=ft_g, line=dict(color="#dc2626", dash="dash", width=1.5))
-    fig.add_annotation(x=ft_g, y=0.97, yref="paper", text=f"ft={ft_g:.2f}",
-                       showarrow=False, font=dict(color="#dc2626", size=13),
+    fig.add_vline(x=ft_g, line=dict(color=_FILE_COLORS[0][1], dash="dash", width=1.5))
+    fig.add_annotation(x=ft_g, y=0.96, yref="paper", text=f"ft={ft_g:.2f}",
+                       showarrow=False, font=dict(color=_FILE_COLORS[0][1], size=13),
                        xanchor="left")
-    fig.add_vline(x=0,    line=_BL)
-    fig.add_vline(x=fr_g, line=_BL)
+    fig.add_hline(y=0,   line=_BL); fig.add_hline(y=1,    line=_BL)
+    fig.add_vline(x=0,   line=_BL); fig.add_vline(x=fr_g, line=_BL)
     fig.update_layout(
         title=dict(text="Weighting Function W(f)", x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="W(f)",
-        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
-        yaxis=dict(**_AX, range=[-_EPS, 1.05]),
-        **_LY,
+        xaxis=_xax(range=[0 - _EPS, fr_g + _EPS]),
+        yaxis=_yax(range=[-_EPS, 1.0 + _EPS], tick0=1),
+        **_LAYOUT,
     )
     return fig
 
 
 def _fig_sdd(datasets):
     f_max = max(float(d["freq_ghz"][-1]) for d in datasets)
-    fig   = go.Figure()
+    y_min, y_max = -80, 0
+    fig = go.Figure()
     for i, d in enumerate(datasets):
-        clr   = _COLORS[i % len(_COLORS)]
-        label = d["label"]
-        rl11  = 20 * np.log10(np.abs(d["sdd11"]) + 1e-15)
-        rl22  = 20 * np.log10(np.abs(d["sdd22"]) + 1e-15)
+        ca, cb = _FILE_COLORS[i % len(_FILE_COLORS)]
+        lbl    = d["label"]
+        rl11   = 20 * np.log10(np.abs(d["sdd11"]) + 1e-15)
+        rl22   = 20 * np.log10(np.abs(d["sdd22"]) + 1e-15)
         fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl11,
-                                  name=f"{label} RL11",
-                                  line=dict(color=clr)))
+                                  name=f"{lbl} SDD11", line=dict(color=ca)))
         fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl22,
-                                  name=f"{label} RL22",
-                                  line=dict(color=clr, dash="dash")))
-    fig.add_hline(y=0,    line=_BL)
-    fig.add_hline(y=-80,  line=_BL)
-    fig.add_vline(x=0,     line=_BL)
-    fig.add_vline(x=f_max, line=_BL)
+                                  name=f"{lbl} SDD22", line=dict(color=cb)))
+    fig.add_hline(y=y_max, line=_BL); fig.add_hline(y=y_min, line=_BL)
+    fig.add_vline(x=0,     line=_BL); fig.add_vline(x=f_max,  line=_BL)
     fig.update_layout(
         title=dict(text="SDD11 & SDD22", x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="Magnitude (dB)",
-        xaxis=dict(**_AX, range=[0 - _EPS, f_max + _EPS]),
-        yaxis=dict(**_AX, range=[-80 - _EPS, 0 + _EPS]),
-        **_LY,
+        xaxis=_xax(range=[0 - _EPS, f_max + _EPS]),
+        yaxis=_yax(range=[y_min - _EPS, y_max + _EPS], tick0=y_max),
+        **_LAYOUT,
     )
     return fig
 
@@ -237,23 +251,26 @@ def _fig_sdd(datasets):
 def _fig_rl(datasets, ft_g, fr_g):
     fig = go.Figure()
     for i, d in enumerate(datasets):
-        clr   = _COLORS[i % len(_COLORS)]
+        clr   = _FILE_COLORS[i % len(_FILE_COLORS)][0]
         rl_db = 20 * np.log10(d["rl_avg"] + 1e-15)
         fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl_db,
                                   name=d["label"], line=dict(color=clr)))
-    fig.add_vline(x=ft_g, line=dict(color="#dc2626", dash="dash", width=1.5))
-    fig.add_annotation(x=ft_g, y=0.97, yref="paper", text=f"ft={ft_g:.2f}",
-                       showarrow=False, font=dict(color="#dc2626", size=13),
+    fig.add_vline(x=ft_g, line=dict(color=_FILE_COLORS[0][1], dash="dash", width=1.5))
+    fig.add_annotation(x=ft_g, y=0.96, yref="paper", text=f"ft={ft_g:.2f}",
+                       showarrow=False, font=dict(color=_FILE_COLORS[0][1], size=13),
                        xanchor="left")
-    fig.add_hline(y=0, line=_BL)
-    fig.add_vline(x=0,    line=_BL)
-    fig.add_vline(x=fr_g, line=_BL)
+    y_vals = [20 * np.log10(d["rl_avg"] + 1e-15) for d in datasets]
+    y_min  = max(-80, float(np.floor(np.min(np.concatenate(y_vals)))))
+    y_max  = 0
+    fig.add_hline(y=y_max, line=_BL); fig.add_hline(y=y_min, line=_BL)
+    fig.add_vline(x=0,     line=_BL); fig.add_vline(x=fr_g,   line=_BL)
     fig.update_layout(
-        title=dict(text="RL_avg(f) = (|RL₁₁| + |RL₂₂|) / 2", x=0.5, xanchor="center", pad=dict(t=20)),
+        title=dict(text="RL_avg(f) = (|RL₁₁| + |RL₂₂|) / 2",
+                   x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="Magnitude (dB)",
-        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
-        yaxis=dict(**_AX),
-        **_LY,
+        xaxis=_xax(range=[0 - _EPS, fr_g + _EPS]),
+        yaxis=_yax(range=[y_min - _EPS, y_max + _EPS], tick0=y_max),
+        **_LAYOUT,
     )
     return fig
 

@@ -28,3 +28,12 @@ def get_smatrix(network: rf.Network) -> np.ndarray:
 def get_port_z0(network: rf.Network) -> float:
     """回傳單端 port 參考阻抗（從 Touchstone 檔案讀取）。"""
     return float(np.real(network.z0[0, 0]))
+
+
+def load_snp(file_path: str) -> rf.Network:
+    """載入任意 SNP Touchstone 檔案，port 數需為 4 的倍數且介於 4～32。"""
+    network = rf.Network(file_path)
+    n = network.number_of_ports
+    if n % 4 != 0 or not (4 <= n <= 32):
+        raise ValueError(f"SNP Analyzer 支援 4～32 port（4 的倍數），此檔案為 {n}-port")
+    return network

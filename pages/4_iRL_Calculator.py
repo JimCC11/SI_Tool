@@ -149,7 +149,8 @@ with st.sidebar:
 
     # ── CSV file ──
     else:
-        uploaded_csv = st.file_uploader("上傳 RL CSV 檔案", type=["csv"], key="irl_csv")
+        uploaded_csv = st.file_uploader("上傳 RL CSV 檔案", type=["csv"],
+                                        accept_multiple_files=True, key="irl_csv")
         st.caption("格式：Frequency_GHz, RL11_dB [, RL22_dB]")
 
     st.divider()
@@ -338,34 +339,50 @@ if vna_mode:
 # CSV FILE MODE
 # ══════════════════════════════════════════════════════════════════════════════
 else:
-    if uploaded_csv is None:
+    if not uploaded_csv:
         st.info("← 請從左側上傳 RL CSV 檔案")
         st.stop()
 
-    try:
-        df       = pd.read_csv(uploaded_csv)
-        freq_ghz = df.iloc[:, 0].to_numpy(dtype=float)
-        freq_hz  = freq_ghz * 1e9
+    results_csv = []
+    for uf in uploaded_csv:
+        try:
+            df       = pd.read_csv(uf)
+            freq_ghz = df.iloc[:, 0].to_numpy(dtype=float)
+            freq_hz  = freq_ghz * 1e9
+            if df.shape[1] >= 3:
+                rl11_lin = 10 ** (df.iloc[:, 1].to_numpy(dtype=float) / 20)
+                rl22_lin = 10 ** (df.iloc[:, 2].to_numpy(dtype=float) / 20)
+            else:
+                rl11_lin = 10 ** (df.iloc[:, 1].to_numpy(dtype=float) / 20)
+                rl22_lin = rl11_lin
+            irl_db, w, rl_avg = compute_irl(freq_hz, rl11_lin, rl22_lin, fb_hz, tr_s, nyquist_factor)
+            results_csv.append(dict(label=uf.name, freq_ghz=freq_ghz, freq_hz=freq_hz,
+                                    rl11_lin=rl11_lin, rl22_lin=rl22_lin,
+                                    irl_db=irl_db, w=w, rl_avg=rl_avg))
+            st.success(f"**{uf.name}** — {freq_ghz[0]:.3f} ~ {freq_ghz[-1]:.3f} GHz")
+        except Exception as e:
+            st.error(f"**{uf.name}** 讀取失敗：{e}")
 
-        if df.shape[1] >= 3:
-            rl11_lin = 10 ** (df.iloc[:, 1].to_numpy(dtype=float) / 20)
-            rl22_lin = 10 ** (df.iloc[:, 2].to_numpy(dtype=float) / 20)
-        else:
-            rl11_lin = 10 ** (df.iloc[:, 1].to_numpy(dtype=float) / 20)
-            rl22_lin = rl11_lin
-
-        irl_db, w, rl_avg = compute_irl(freq_hz, rl11_lin, rl22_lin, fb_hz, tr_s, nyquist_factor)
-
-    except Exception as e:
-        st.error(f"CSV 讀取失敗：{e}")
+    if not results_csv:
         st.stop()
 
     # ── iRL 結果 ──
     st.subheader("iRL 計算結果")
-    st.metric(uploaded_csv.name, f"{irl_db:.2f} dB")
+    cols = st.columns(min(len(results_csv), 4))
+    for i, r in enumerate(results_csv):
+        with cols[i % 4]:
+            st.metric(r["label"], f"{r['irl_db']:.2f} dB")
+
+    if len(results_csv) > 1:
+        st.dataframe(pd.DataFrame([{"檔案": r["label"], "iRL (dB)": f"{r['irl_db']:.2f}"}
+                                    for r in results_csv]),
+                     use_container_width=True, hide_index=True)
 
     # ── 圖表 ──
-    datasets = [{"freq_ghz": freq_ghz, "rl_avg": rl_avg,
-                 "sdd11": rl11_lin, "sdd22": rl22_lin, "label": uploaded_csv.name}]
+    datasets = [{"freq_ghz": r["freq_ghz"], "rl_avg": r["rl_avg"],
+                 "sdd11": r["rl11_lin"], "sdd22": r["rl22_lin"], "label": r["label"]}
+                for r in results_csv]
+    freq_ghz = results_csv[0]["freq_ghz"]
+    w        = results_csv[0]["w"]
     st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
     st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz, fb_hz, tr_s, nyquist_factor), use_container_width=True)

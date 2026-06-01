@@ -63,31 +63,33 @@ def _n_pairs_from_name(name: str) -> int:
     return 1
 
 
-def _process_sp(uf, mapping: str, pair_idx: int,
-                fb_hz: float, tr_s: float, nyquist_factor: float) -> dict:
+def _process_sp(uf, mapping: str, pair_indices: list,
+                fb_hz: float, tr_s: float, nyquist_factor: float) -> list:
     ext = uf.name.lower().rsplit('.', 1)[-1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as f:
         f.write(uf.getvalue())
         tmp = f.name
     try:
         nw = load_snp(tmp)
-        n_pairs = nw.number_of_ports // 4
-        idx = min(pair_idx, n_pairs - 1)
-
-        s_se = nw.s
-        if n_pairs == 1:
-            s_mm = single_to_mixed_mode(s_se, mapping=mapping)
-        else:
-            s_mm = single_to_mixed_mode_npairs(s_se, n_pairs=n_pairs, mapping=mapping)
-
-        sdd11 = s_mm[:, 4 * idx,     4 * idx]
-        sdd22 = s_mm[:, 4 * idx + 1, 4 * idx + 1]
+        n_pairs  = nw.number_of_ports // 4
         freq_hz  = nw.f
         freq_ghz = get_frequency_ghz(nw)
-        irl_db, w, rl_avg = compute_irl(freq_hz, sdd11, sdd22, fb_hz, tr_s, nyquist_factor)
-        return dict(label=uf.name, freq_ghz=freq_ghz, freq_hz=freq_hz,
-                    sdd11=sdd11, sdd22=sdd22, irl_db=irl_db, w=w, rl_avg=rl_avg,
-                    n_pairs=n_pairs)
+
+        s_se = nw.s
+        s_mm = (single_to_mixed_mode(s_se, mapping=mapping) if n_pairs == 1
+                else single_to_mixed_mode_npairs(s_se, n_pairs=n_pairs, mapping=mapping))
+
+        results = []
+        for idx in pair_indices:
+            idx   = min(idx, n_pairs - 1)
+            sdd11 = s_mm[:, 4 * idx,     4 * idx]
+            sdd22 = s_mm[:, 4 * idx + 1, 4 * idx + 1]
+            irl_db, w, rl_avg = compute_irl(freq_hz, sdd11, sdd22, fb_hz, tr_s, nyquist_factor)
+            label = uf.name if n_pairs == 1 else f"{uf.name}  Pair {idx + 1}"
+            results.append(dict(label=label, freq_ghz=freq_ghz, freq_hz=freq_hz,
+                                sdd11=sdd11, sdd22=sdd22, irl_db=irl_db, w=w, rl_avg=rl_avg,
+                                n_pairs=n_pairs))
+        return results
     finally:
         try:
             os.unlink(tmp)
@@ -111,12 +113,13 @@ with st.sidebar:
             key="irl_sp",
         )
 
-        pair_idx  = 0
-        max_pairs = max((_n_pairs_from_name(f.name) for f in uploaded_sp), default=1) if uploaded_sp else 1
+        pair_indices = [0]
+        max_pairs    = max((_n_pairs_from_name(f.name) for f in uploaded_sp), default=1) if uploaded_sp else 1
         if max_pairs > 1:
-            pair_labels = [f"Pair {i + 1}" for i in range(max_pairs)]
-            sel      = st.selectbox("選擇差分對", pair_labels, key="irl_pair")
-            pair_idx = pair_labels.index(sel)
+            pair_labels  = [f"Pair {i + 1}" for i in range(max_pairs)]
+            sel_labels   = st.multiselect("選擇差分對", pair_labels,
+                                          default=pair_labels[:1], key="irl_pairs")
+            pair_indices = [pair_labels.index(l) for l in sel_labels] if sel_labels else []
 
         st.divider()
         st.subheader("Port Mapping")
@@ -286,15 +289,19 @@ if vna_mode:
         st.info("← 請從左側上傳 S-parameter 檔案")
         st.stop()
 
+    if not pair_indices:
+        st.warning("← 請選擇至少一個差分對")
+        st.stop()
+
     results = []
     errors  = []
     for uf in uploaded_sp:
         try:
-            r = _process_sp(uf, mapping, pair_idx, fb_hz, tr_s, nyquist_factor)
-            results.append(r)
+            rs = _process_sp(uf, mapping, pair_indices, fb_hz, tr_s, nyquist_factor)
+            results.extend(rs)
             st.success(
-                f"**{uf.name}** — {r['n_pairs']} 差分對 | "
-                f"{r['freq_ghz'][0]:.3f} ~ {r['freq_ghz'][-1]:.3f} GHz"
+                f"**{uf.name}** — {rs[0]['n_pairs']} 差分對 | "
+                f"{rs[0]['freq_ghz'][0]:.3f} ~ {rs[0]['freq_ghz'][-1]:.3f} GHz"
             )
         except Exception as e:
             errors.append((uf.name, str(e)))
@@ -326,7 +333,6 @@ if vna_mode:
     st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
     st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz, fb_hz, tr_s, nyquist_factor),
                     use_container_width=True)
-    st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSV FILE MODE
@@ -363,4 +369,3 @@ else:
                  "sdd11": rl11_lin, "sdd22": rl22_lin, "label": uploaded_csv.name}]
     st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
     st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz, fb_hz, tr_s, nyquist_factor), use_container_width=True)
-    st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)

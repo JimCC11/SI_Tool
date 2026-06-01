@@ -206,8 +206,9 @@ def _fig_w(freq_ghz, w, ft_g, fr_g):
     return fig
 
 
-def _fig_sdd(datasets, fr_g):
-    fig = go.Figure()
+def _fig_sdd(datasets):
+    f_max = max(float(d["freq_ghz"][-1]) for d in datasets)
+    fig   = go.Figure()
     for i, d in enumerate(datasets):
         clr   = _COLORS[i % len(_COLORS)]
         label = d["label"]
@@ -219,14 +220,15 @@ def _fig_sdd(datasets, fr_g):
         fig.add_trace(go.Scatter(x=d["freq_ghz"], y=rl22,
                                   name=f"{label} RL22",
                                   line=dict(color=clr, dash="dash")))
-    fig.add_hline(y=0, line=_BL)
-    fig.add_vline(x=0,    line=_BL)
-    fig.add_vline(x=fr_g, line=_BL)
+    fig.add_hline(y=0,    line=_BL)
+    fig.add_hline(y=-80,  line=_BL)
+    fig.add_vline(x=0,     line=_BL)
+    fig.add_vline(x=f_max, line=_BL)
     fig.update_layout(
         title=dict(text="SDD11 & SDD22", x=0.5, xanchor="center", pad=dict(t=20)),
         xaxis_title="Frequency (GHz)", yaxis_title="Magnitude (dB)",
-        xaxis=dict(**_AX, range=[0 - _EPS, fr_g + _EPS]),
-        yaxis=dict(**_AX),
+        xaxis=dict(**_AX, range=[0 - _EPS, f_max + _EPS]),
+        yaxis=dict(**_AX, range=[-80 - _EPS, 0 + _EPS]),
         **_LY,
     )
     return fig
@@ -301,14 +303,10 @@ if vna_mode:
     datasets = [{"freq_ghz": r["freq_ghz"], "rl_avg": r["rl_avg"],
                  "sdd11": r["sdd11"], "sdd22": r["sdd22"], "label": r["label"]}
                 for r in results]
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz),
-                        use_container_width=True)
-    with col2:
-        st.plotly_chart(_fig_sdd(datasets, fr_ghz), use_container_width=True)
-    with col3:
-        st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
+    st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
+    st.plotly_chart(_fig_w(results[0]["freq_ghz"], results[0]["w"], ft_ghz, fr_ghz),
+                    use_container_width=True)
+    st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSV FILE MODE
@@ -343,10 +341,6 @@ else:
     # ── 圖表 ──
     datasets = [{"freq_ghz": freq_ghz, "rl_avg": rl_avg,
                  "sdd11": rl11_lin, "sdd22": rl22_lin, "label": uploaded_csv.name}]
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz), use_container_width=True)
-    with col2:
-        st.plotly_chart(_fig_sdd(datasets, fr_ghz), use_container_width=True)
-    with col3:
-        st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)
+    st.plotly_chart(_fig_sdd(datasets), use_container_width=True)
+    st.plotly_chart(_fig_w(freq_ghz, w, ft_ghz, fr_ghz), use_container_width=True)
+    st.plotly_chart(_fig_rl(datasets, ft_ghz, fr_ghz), use_container_width=True)

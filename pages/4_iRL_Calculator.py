@@ -138,9 +138,9 @@ with st.sidebar:
     st.subheader("iRL 參數")
 
     _irl_defaults = pd.DataFrame({
-        "Parameter":   ["Symbol Rate", "Rise Time Tᵣ", "Nyquist factor"],
-        "Value":       [32.0,          25.0,            1.5],
-        "Unit":        ["GBaud",       "ps",            "×Nyquist"],
+        "Parameter": ["Symbol Rate", "Rise Time Tᵣ"],
+        "Value":     [32.0,          25.0],
+        "Unit":      ["GBaud",       "ps"],
     })
     _edited = st.data_editor(
         _irl_defaults,
@@ -150,14 +150,14 @@ with st.sidebar:
         disabled=["Parameter", "Unit"],
         column_config={
             "Value": st.column_config.NumberColumn(
-                label="Value", min_value=0.01, format="%.3g", step=1.0,
+                label="Value", min_value=0.01, format="%.4g",
             )
         },
     )
 
-    symbol_rate_gbaud = max(1.0,  float(_edited.iloc[0]["Value"]))
-    rise_time_ps_irl  = max(1.0,  float(_edited.iloc[1]["Value"]))
-    nyquist_factor    = max(0.1,  float(_edited.iloc[2]["Value"]))
+    symbol_rate_gbaud = max(1.0, float(_edited.iloc[0]["Value"]))
+    rise_time_ps_irl  = max(1.0, float(_edited.iloc[1]["Value"]))
+    nyquist_factor    = 1.5
 
     fb_hz  = symbol_rate_gbaud * 1e9
     tr_s   = rise_time_ps_irl * 1e-12
@@ -173,7 +173,7 @@ with st.sidebar:
     <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>
   </tr>
   <tr>
-    <td style="padding:4px 8px;border:1px solid #555;">fr = Nf × Nyquist</td>
+    <td style="padding:4px 8px;border:1px solid #555;">fr = 1.5 × Nyquist</td>
     <td style="padding:4px 8px;border:1px solid #555;text-align:right;
                font-weight:bold;color:#2563eb;">{fr_ghz:.2f}</td>
     <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>

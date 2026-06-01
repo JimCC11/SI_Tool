@@ -136,18 +136,50 @@ with st.sidebar:
 
     # ── iRL 參數 ──
     st.subheader("iRL 參數")
-    symbol_rate_gbaud = st.number_input("Symbol Rate (GBaud)", 1.0, 200.0, 32.0, 1.0, key="irl_fb")
-    rise_time_ps_irl  = st.number_input("Rise Time Tr (ps)",   1.0, 500.0, 25.0, 1.0, key="irl_tr")
-    nyquist_factor    = st.number_input(
-        "Nyquist factor", 0.5, 5.0, 1.5, 0.1, key="irl_nf",
-        help="fr = factor × Nyquist (Nyquist = Symbol Rate / 2)",
+
+    _irl_defaults = pd.DataFrame({
+        "Parameter":   ["Symbol Rate", "Rise Time Tᵣ", "Nyquist factor"],
+        "Value":       [32.0,          25.0,            1.5],
+        "Unit":        ["GBaud",       "ps",            "×Nyquist"],
+    })
+    _edited = st.data_editor(
+        _irl_defaults,
+        hide_index=True,
+        use_container_width=True,
+        key="irl_params_tbl",
+        disabled=["Parameter", "Unit"],
+        column_config={
+            "Value": st.column_config.NumberColumn(
+                label="Value", min_value=0.01, format="%.3g", step=1.0,
+            )
+        },
     )
+
+    symbol_rate_gbaud = max(1.0,  float(_edited.iloc[0]["Value"]))
+    rise_time_ps_irl  = max(1.0,  float(_edited.iloc[1]["Value"]))
+    nyquist_factor    = max(0.1,  float(_edited.iloc[2]["Value"]))
 
     fb_hz  = symbol_rate_gbaud * 1e9
     tr_s   = rise_time_ps_irl * 1e-12
     ft_ghz = 0.2365 / tr_s / 1e9
     fr_ghz = nyquist_factor * (symbol_rate_gbaud / 2)
-    st.caption(f"ft = {ft_ghz:.2f} GHz  |  fr = {fr_ghz:.2f} GHz")
+
+    st.markdown(f"""
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:2px">
+  <tr>
+    <td style="padding:4px 8px;border:1px solid #555;">ft = 0.2365 / Tᵣ</td>
+    <td style="padding:4px 8px;border:1px solid #555;text-align:right;
+               font-weight:bold;color:#2563eb;">{ft_ghz:.2f}</td>
+    <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 8px;border:1px solid #555;">fr = Nf × Nyquist</td>
+    <td style="padding:4px 8px;border:1px solid #555;text-align:right;
+               font-weight:bold;color:#2563eb;">{fr_ghz:.2f}</td>
+    <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>
+  </tr>
+</table>
+""", unsafe_allow_html=True)
 
     st.divider()
     st.subheader("Gate 設定")
@@ -162,8 +194,15 @@ def _fig_w(freq_ghz, w, ft_g, fr_g):
         x=freq_ghz, y=w, name="W(f)", line=dict(color="#2563eb"),
         fill="tozeroy", fillcolor="rgba(37,99,235,0.08)",
     ))
+    # shade excluded region (fr ~ f_max)
+    if fr_g < f_max:
+        fig.add_vrect(x0=fr_g, x1=f_max,
+                      fillcolor="rgba(160,160,160,0.18)", layer="below", line_width=0)
+        fig.add_annotation(x=(fr_g + f_max) / 2, y=0.5, yref="paper",
+                           text="計算範圍外", showarrow=False,
+                           font=dict(color="#888", size=12))
     for xv, label, color in [(ft_g, f"ft={ft_g:.2f}", "#dc2626"),
-                              (fr_g, f"fr={fr_g:.2f}", "#16a34a")]:
+                              (fr_g, f"fr={fr_g:.2f} (上限)", "#16a34a")]:
         if xv <= f_max:
             fig.add_vline(x=xv, line=dict(color=color, dash="dash", width=1.5))
             fig.add_annotation(x=xv, y=1.02, yref="paper", text=label,
@@ -183,6 +222,10 @@ def _fig_w(freq_ghz, w, ft_g, fr_g):
 def _fig_rl(datasets, ft_g, fr_g):
     f_max = max(float(d["freq_ghz"][-1]) for d in datasets)
     fig   = go.Figure()
+    # shade excluded region
+    if fr_g < f_max:
+        fig.add_vrect(x0=fr_g, x1=f_max,
+                      fillcolor="rgba(160,160,160,0.18)", layer="below", line_width=0)
     for i, d in enumerate(datasets):
         clr = _COLORS[i % len(_COLORS)]
         rl_db = 20 * np.log10(d["rl_avg"] + 1e-15)
@@ -191,9 +234,11 @@ def _fig_rl(datasets, ft_g, fr_g):
             line=dict(color=clr),
         ))
     for xv, label, color in [(ft_g, f"ft={ft_g:.2f}", "#dc2626"),
-                              (fr_g, f"fr={fr_g:.2f}", "#16a34a")]:
+                              (fr_g, f"fr={fr_g:.2f} (上限)", "#16a34a")]:
         if xv <= f_max:
             fig.add_vline(x=xv, line=dict(color=color, dash="dash", width=1.5))
+            fig.add_annotation(x=xv, y=1.02, yref="paper", text=label,
+                               showarrow=False, font=dict(color=color, size=13))
     fig.add_hline(y=0, line=_BL)
     fig.add_vline(x=0,     line=_BL)
     fig.add_vline(x=f_max, line=_BL)

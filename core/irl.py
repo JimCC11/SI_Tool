@@ -21,14 +21,23 @@ def compute_irl(freq_hz: np.ndarray, sdd11: np.ndarray, sdd22: np.ndarray,
                 nyquist_factor: float = 1.5) -> tuple:
     """
     iRL = dB( sqrt( 1/N · Σ W(fi) · RL_avg²(fi) ) )
+    Frequency range is limited to 0 ~ fr (= nyquist_factor × fb/2).
 
     Returns:
         irl_db  : scalar [dB], more negative = better RL
-        w       : weighting function array
-        rl_avg  : (|SDD11| + |SDD22|) / 2, linear magnitude
+        w       : weighting function array (full input length, zeros above fr)
+        rl_avg  : (|SDD11| + |SDD22|) / 2, linear magnitude (full input length)
     """
-    w = weighting_function(freq_hz, symbol_rate_hz, rise_time_s, nyquist_factor)
-    rl_avg = (np.abs(sdd11) + np.abs(sdd22)) / 2
-    irl_linear = np.sqrt(np.sum(w * rl_avg ** 2) / len(freq_hz))
-    irl_db = 20 * np.log10(irl_linear + 1e-15)
-    return irl_db, w, rl_avg
+    fr = nyquist_factor * (symbol_rate_hz / 2)
+    mask = freq_hz <= fr
+
+    w_full    = weighting_function(freq_hz, symbol_rate_hz, rise_time_s, nyquist_factor)
+    rl_avg    = (np.abs(sdd11) + np.abs(sdd22)) / 2
+
+    w_masked  = w_full[mask]
+    rl_masked = rl_avg[mask]
+    n         = mask.sum()
+
+    irl_linear = np.sqrt(np.sum(w_masked * rl_masked ** 2) / n) if n > 0 else 0.0
+    irl_db     = 20 * np.log10(irl_linear + 1e-15)
+    return irl_db, w_full, rl_avg

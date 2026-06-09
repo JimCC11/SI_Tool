@@ -6,11 +6,9 @@ def compute_ccicn(
     mode: str,
     fb_hz: float,
     a_mv: float,
-    il_post_nyquist_db: float,
+    il_post_db: float,
     tr_s: float,
-    il_pre_nyquist_db: float = 0.0,
-    alpha_pre: float = 1.0,
-    alpha_post: float = 1.0,
+    il_pre_db: float = 0.0,
     nyquist_factor: float = 1.5,
     df_hz: float = 10e6,
 ) -> tuple:
@@ -21,12 +19,9 @@ def compute_ccicn(
              May come from different files with different frequency grids.
     mode   : 'NEXT' or 'FEXT'
 
-    IL model: IL(f) = IL_ref × (f / f_nyquist)^alpha  [dB, negative]
-      alpha=1.0  → linear (dielectric loss)
-      alpha=0.5  → √f   (skin effect)
-
-    FEXT: uses IL_pre + IL_post, amplitude A_FT
-    NEXT: uses 2 × IL_post,      amplitude A_NT
+    IL_pre and IL_post are fixed dB values (no frequency scaling).
+    FEXT: ch_power = 10^((IL_pre + IL_post) / 10)
+    NEXT: ch_power = 10^(2 × IL_post / 10)
 
     Returns: (ccicn_mv_rms, freq_ghz_grid, integrand)
     """
@@ -41,14 +36,11 @@ def compute_ccicn(
     for freq_snp_hz, s in traces:
         ps_power += np.interp(freqs, freq_snp_hz, np.abs(s) ** 2)
 
-    # IL model with exponent
-    f_ratio    = freqs / nyquist_hz
-    il_post    = il_post_nyquist_db * (f_ratio ** alpha_post)
+    # IL as fixed constants (user-defined)
     if mode == 'FEXT':
-        il_pre   = il_pre_nyquist_db * (f_ratio ** alpha_pre)
-        ch_power = 10 ** ((il_pre + il_post) / 10)
+        ch_power = 10 ** ((il_pre_db + il_post_db) / 10)
     else:
-        ch_power = 10 ** (2 * il_post / 10)
+        ch_power = 10 ** (2 * il_post_db / 10)
 
     # Signal PSD (σ_x² = 1)
     a_v = a_mv * 1e-3

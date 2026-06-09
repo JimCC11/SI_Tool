@@ -155,16 +155,13 @@ with st.sidebar:
 
     _defaults = pd.DataFrame({
         "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
-                      "IL_pre @ Nyquist", "IL_pre α",
-                      "IL_post @ Nyquist", "IL_post α",
+                      "IL_pre", "IL_post",
                       "Rise Time Tᵣ"],
         "Value":     [32.0,    800.0,  1000.0,
-                      -20.0,   1.0,
-                      -6.0,    1.0,
+                      -20.0,   -6.0,
                       7.5],
         "Unit":      ["GBaud", "mVpp", "mVpp",
-                      "dB",    "–",
-                      "dB",    "–",
+                      "dB",    "dB",
                       "ps"],
     })
     _edited = st.data_editor(
@@ -176,14 +173,12 @@ with st.sidebar:
         },
     )
 
-    fb_gbaud    = float(_edited.iloc[0]["Value"])
-    a_ft_mv     = float(_edited.iloc[1]["Value"])
-    a_nt_mv     = float(_edited.iloc[2]["Value"])
-    il_pre_db   = float(_edited.iloc[3]["Value"])
-    alpha_pre   = float(_edited.iloc[4]["Value"])
-    il_post_db  = float(_edited.iloc[5]["Value"])
-    alpha_post  = float(_edited.iloc[6]["Value"])
-    tr_ps       = float(_edited.iloc[7]["Value"])
+    fb_gbaud   = float(_edited.iloc[0]["Value"])
+    a_ft_mv    = float(_edited.iloc[1]["Value"])
+    a_nt_mv    = float(_edited.iloc[2]["Value"])
+    il_pre_db  = float(_edited.iloc[3]["Value"])
+    il_post_db = float(_edited.iloc[4]["Value"])
+    tr_ps      = float(_edited.iloc[5]["Value"])
 
     fb_hz  = fb_gbaud * 1e9
     tr_s   = tr_ps * 1e-12
@@ -304,15 +299,13 @@ if all_next_traces:
     traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
     ccicn_next_mv, _, _ = compute_ccicn(
         traces_next, 'NEXT', fb_hz, a_nt_mv, il_post_db, tr_s,
-        alpha_post=alpha_post,
     )
 
 if all_fext_traces:
     traces_fext = [(fhz, s) for _, fhz, _, s in all_fext_traces]
     ccicn_fext_mv, _, _ = compute_ccicn(
         traces_fext, 'FEXT', fb_hz, a_ft_mv, il_post_db, tr_s,
-        il_pre_nyquist_db=il_pre_db,
-        alpha_pre=alpha_pre, alpha_post=alpha_post,
+        il_pre_db=il_pre_db,
     )
 
 st.subheader("ccICN 計算結果")

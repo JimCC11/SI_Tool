@@ -84,62 +84,88 @@ def _port_map_html(n_pairs: int, mapping: str) -> str:
 with st.sidebar:
     st.header("設定")
 
-    uploaded_sp = st.file_uploader(
-        "上傳 S-parameter 檔案",
-        type=_SNP_TYPES,
-        accept_multiple_files=True,
-        key="ccicn_sp",
-    )
+    src      = st.radio("資料來源", ["S-parameter", "CSV"], horizontal=True, key="ccicn_src")
+    csv_mode = src == "CSV"
 
-    n_pairs = _n_pairs_from_name(uploaded_sp[0].name) if uploaded_sp else 1
+    # ════════════════════ S-parameter mode ════════════════════
+    if not csv_mode:
+        uploaded_sp = st.file_uploader(
+            "上傳 S-parameter 檔案",
+            type=_SNP_TYPES,
+            accept_multiple_files=True,
+            key="ccicn_sp",
+        )
 
-    # Build NEXT/FEXT option lists
-    next_options, next_map = [], {}
-    fext_options, fext_map = [], {}
-    for a in range(n_pairs):
-        for v in range(n_pairs):
-            if a != v:
-                nl = f"Pair {2*a+1} → Pair {2*v+1}"
-                fl = f"Pair {2*a+1} → Pair {2*v+2}"
-                next_options.append(nl); next_map[nl] = (a, v)
-                fext_options.append(fl); fext_map[fl] = (a, v)
+        n_pairs = _n_pairs_from_name(uploaded_sp[0].name) if uploaded_sp else 1
 
-    # ── Per-file NEXT / FEXT path selection ──
-    file_next_sel = {}   # {filename: [selected labels]}
-    file_fext_sel = {}
+        next_options, next_map = [], {}
+        fext_options, fext_map = [], {}
+        for a in range(n_pairs):
+            for v in range(n_pairs):
+                if a != v:
+                    nl = f"Pair {2*a+1} → Pair {2*v+1}"
+                    fl = f"Pair {2*a+1} → Pair {2*v+2}"
+                    next_options.append(nl); next_map[nl] = (a, v)
+                    fext_options.append(fl); fext_map[fl] = (a, v)
 
-    if uploaded_sp and n_pairs >= 2:
-        st.caption(f"偵測：{n_pairs * 4}-port → {n_pairs} 差分對")
-        for uf in uploaded_sp:
-            st.divider()
-            st.caption(f"📄 **{uf.name}**")
-            file_next_sel[uf.name] = st.multiselect(
-                "NEXT", next_options, default=[],
-                key=f"ccicn_nx_{uf.name}",
-            )
-            file_fext_sel[uf.name] = st.multiselect(
-                "FEXT", fext_options, default=[],
-                key=f"ccicn_fx_{uf.name}",
-            )
-    elif n_pairs < 2:
-        st.caption("需要 ≥ 2 差分對")
+        file_next_sel, file_fext_sel = {}, {}
+        if uploaded_sp and n_pairs >= 2:
+            st.caption(f"偵測：{n_pairs * 4}-port → {n_pairs} 差分對")
+            for uf in uploaded_sp:
+                st.divider()
+                st.caption(f"📄 **{uf.name}**")
+                file_next_sel[uf.name] = st.multiselect(
+                    "NEXT", next_options, default=[],
+                    key=f"ccicn_nx_{uf.name}",
+                )
+                file_fext_sel[uf.name] = st.multiselect(
+                    "FEXT", fext_options, default=[],
+                    key=f"ccicn_fx_{uf.name}",
+                )
+        elif uploaded_sp and n_pairs < 2:
+            st.caption("需要 ≥ 2 差分對")
 
-    st.divider()
-    st.subheader("Port Mapping")
-    mapping_choice = st.radio("Port Mapping", ["Odd-Even", "N+1"], index=0,
-                              horizontal=True, label_visibility="hidden", key="ccicn_pm")
-    mapping = 'A' if mapping_choice == 'Odd-Even' else 'B'
-    st.markdown(_port_map_html(n_pairs, mapping), unsafe_allow_html=True)
+        st.divider()
+        st.subheader("Port Mapping")
+        mapping_choice = st.radio("Port Mapping", ["Odd-Even", "N+1"], index=0,
+                                  horizontal=True, label_visibility="hidden", key="ccicn_pm")
+        mapping = 'A' if mapping_choice == 'Odd-Even' else 'B'
+        st.markdown(_port_map_html(n_pairs if uploaded_sp else 1, mapping),
+                    unsafe_allow_html=True)
 
+    # ════════════════════ CSV mode ════════════════════
+    else:
+        st.subheader("NEXT CSV")
+        next_csv_files = st.file_uploader(
+            "上傳 NEXT CSV 檔案", type=["csv"],
+            accept_multiple_files=True, key="ccicn_nx_csv",
+        )
+        st.caption("格式：Frequency_GHz, Magnitude_dB")
+
+        st.subheader("FEXT CSV")
+        fext_csv_files = st.file_uploader(
+            "上傳 FEXT CSV 檔案", type=["csv"],
+            accept_multiple_files=True, key="ccicn_fx_csv",
+        )
+        st.caption("格式：Frequency_GHz, Magnitude_dB")
+
+    # ════════════════════ ccICN 參數 (共用) ════════════════════
     st.divider()
     st.subheader("ccICN 參數")
+
     _defaults = pd.DataFrame({
         "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
-                      "IL_pre @ Nyquist", "IL_post @ Nyquist", "Rise Time Tᵣ"],
-        "Value":     [32.0,              800.0,  1000.0,
-                      -20.0,             -6.0,                  7.5],
-        "Unit":      ["GBaud",           "mVpp", "mVpp",
-                      "dB",              "dB",                  "ps"],
+                      "IL_pre @ Nyquist", "IL_pre α",
+                      "IL_post @ Nyquist", "IL_post α",
+                      "Rise Time Tᵣ"],
+        "Value":     [32.0,    800.0,  1000.0,
+                      -20.0,   1.0,
+                      -6.0,    1.0,
+                      7.5],
+        "Unit":      ["GBaud", "mVpp", "mVpp",
+                      "dB",    "–",
+                      "dB",    "–",
+                      "ps"],
     })
     _edited = st.data_editor(
         _defaults, hide_index=True, use_container_width=True,
@@ -150,12 +176,14 @@ with st.sidebar:
         },
     )
 
-    fb_gbaud   = float(_edited.iloc[0]["Value"])
-    a_ft_mv    = float(_edited.iloc[1]["Value"])
-    a_nt_mv    = float(_edited.iloc[2]["Value"])
-    il_pre_db  = float(_edited.iloc[3]["Value"])
-    il_post_db = float(_edited.iloc[4]["Value"])
-    tr_ps      = float(_edited.iloc[5]["Value"])
+    fb_gbaud    = float(_edited.iloc[0]["Value"])
+    a_ft_mv     = float(_edited.iloc[1]["Value"])
+    a_nt_mv     = float(_edited.iloc[2]["Value"])
+    il_pre_db   = float(_edited.iloc[3]["Value"])
+    alpha_pre   = float(_edited.iloc[4]["Value"])
+    il_post_db  = float(_edited.iloc[5]["Value"])
+    alpha_post  = float(_edited.iloc[6]["Value"])
+    tr_ps       = float(_edited.iloc[7]["Value"])
 
     fb_hz  = fb_gbaud * 1e9
     tr_s   = tr_ps * 1e-12
@@ -181,67 +209,92 @@ with st.sidebar:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-if not uploaded_sp:
-    st.info("← 請從左側上傳 S-parameter 檔案（S8P 以上）")
-    st.stop()
+# all_next_traces / all_fext_traces: (display_label, freq_hz, freq_ghz, s)
+all_next_traces: list = []
+all_fext_traces: list = []
 
-if n_pairs < 2:
-    st.warning("需要 ≥ 2 對差分對的 SNP 檔案（S8P 以上）")
-    st.stop()
+# ══════════════════════ S-parameter mode ══════════════════════
+if not csv_mode:
+    if not uploaded_sp:
+        st.info("← 請從左側上傳 S-parameter 檔案（S8P 以上）")
+        st.stop()
 
-# all_next_traces / all_fext_traces: combined list across all files
-# each entry: (display_label, freq_hz, freq_ghz, s_complex)
-all_next_traces = []
-all_fext_traces = []
+    if n_pairs < 2:
+        st.warning("需要 ≥ 2 對差分對的 SNP 檔案（S8P 以上）")
+        st.stop()
 
-tmp_paths = []
-try:
-    for uf in uploaded_sp:
-        ext = uf.name.lower().rsplit('.', 1)[-1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as f:
-            f.write(uf.getvalue())
-            tmp_paths.append(f.name)
-        try:
-            nw       = load_snp(tmp_paths[-1])
-            freq_hz  = nw.f
-            freq_ghz = get_frequency_ghz(nw)
-            n_p      = nw.number_of_ports // 4
-            s_se     = nw.s
-            s_mm     = (single_to_mixed_mode(s_se, mapping=mapping) if n_p == 1
-                        else single_to_mixed_mode_npairs(s_se, n_pairs=n_p, mapping=mapping))
+    tmp_paths = []
+    try:
+        for uf in uploaded_sp:
+            ext = uf.name.lower().rsplit('.', 1)[-1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as f:
+                f.write(uf.getvalue())
+                tmp_paths.append(f.name)
+            try:
+                nw       = load_snp(tmp_paths[-1])
+                freq_hz  = nw.f
+                freq_ghz = get_frequency_ghz(nw)
+                n_p      = nw.number_of_ports // 4
+                s_se     = nw.s
+                s_mm     = (single_to_mixed_mode(s_se, mapping=mapping) if n_p == 1
+                            else single_to_mixed_mode_npairs(s_se, n_pairs=n_p, mapping=mapping))
 
-            fname = uf.name
-            multi = len(uploaded_sp) > 1
+                multi = len(uploaded_sp) > 1
+                for lbl in file_next_sel.get(uf.name, []):
+                    a, v = next_map[lbl]
+                    if a < n_p and v < n_p:
+                        s    = s_mm[:, 4*v, 4*a]
+                        disp = f"{uf.name}  {lbl}" if multi else lbl
+                        all_next_traces.append((disp, freq_hz, freq_ghz, s))
 
-            for lbl in file_next_sel.get(fname, []):
-                a, v = next_map[lbl]
-                if a < n_p and v < n_p:
-                    s = s_mm[:, 4*v, 4*a]
-                    disp = f"{fname}  {lbl}" if multi else lbl
-                    all_next_traces.append((disp, freq_hz, freq_ghz, s))
+                for lbl in file_fext_sel.get(uf.name, []):
+                    a, v = fext_map[lbl]
+                    if a < n_p and v < n_p:
+                        s    = s_mm[:, 4*v+1, 4*a]
+                        disp = f"{uf.name}  {lbl}" if multi else lbl
+                        all_fext_traces.append((disp, freq_hz, freq_ghz, s))
 
-            for lbl in file_fext_sel.get(fname, []):
-                a, v = fext_map[lbl]
-                if a < n_p and v < n_p:
-                    s = s_mm[:, 4*v+1, 4*a]
-                    disp = f"{fname}  {lbl}" if multi else lbl
-                    all_fext_traces.append((disp, freq_hz, freq_ghz, s))
+                st.success(
+                    f"**{uf.name}** — {n_p} 差分對 | "
+                    f"{freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz | "
+                    f"NEXT: {len(file_next_sel.get(uf.name,[]))} 路徑  "
+                    f"FEXT: {len(file_fext_sel.get(uf.name,[]))} 路徑"
+                )
+            except Exception as e:
+                st.error(f"**{uf.name}** 讀取失敗：{e}")
+    finally:
+        for p in tmp_paths:
+            try: os.unlink(p)
+            except Exception: pass
 
-            st.success(
-                f"**{fname}** — {n_p} 差分對 | "
-                f"{freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz | "
-                f"NEXT: {len(file_next_sel.get(fname,[]))} 路徑, "
-                f"FEXT: {len(file_fext_sel.get(fname,[]))} 路徑"
-            )
-        except Exception as e:
-            st.error(f"**{uf.name}** 讀取失敗：{e}")
-finally:
-    for p in tmp_paths:
-        try: os.unlink(p)
-        except Exception: pass
+# ══════════════════════ CSV mode ══════════════════════
+else:
+    has_csv = bool(next_csv_files or fext_csv_files)
+    if not has_csv:
+        st.info("← 請從左側上傳 NEXT / FEXT CSV 檔案")
+        st.stop()
 
+    def _load_csv_traces(csv_files, kind: str) -> list:
+        out = []
+        for uf in (csv_files or []):
+            try:
+                df       = pd.read_csv(uf)
+                freq_ghz = df.iloc[:, 0].to_numpy(dtype=float)
+                freq_hz  = freq_ghz * 1e9
+                mag_db   = df.iloc[:, 1].to_numpy(dtype=float)
+                s_mag    = 10 ** (mag_db / 20)
+                out.append((uf.name, freq_hz, freq_ghz, s_mag))
+                st.success(f"**{uf.name}** [{kind}] — {freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz")
+            except Exception as e:
+                st.error(f"**{uf.name}** [{kind}] 讀取失敗：{e}")
+        return out
+
+    all_next_traces = _load_csv_traces(next_csv_files, "NEXT")
+    all_fext_traces = _load_csv_traces(fext_csv_files, "FEXT")
+
+# ── 共同：無路徑時停止 ────────────────────────────────────────────────────────
 if not all_next_traces and not all_fext_traces:
-    st.info("← 請從左側各檔案選擇 NEXT / FEXT 路徑")
+    st.info("← 請選擇 NEXT / FEXT 路徑")
     st.stop()
 
 # ── ccICN 計算結果 ────────────────────────────────────────────────────────────
@@ -251,6 +304,7 @@ if all_next_traces:
     traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
     ccicn_next_mv, _, _ = compute_ccicn(
         traces_next, 'NEXT', fb_hz, a_nt_mv, il_post_db, tr_s,
+        alpha_post=alpha_post,
     )
 
 if all_fext_traces:
@@ -258,6 +312,7 @@ if all_fext_traces:
     ccicn_fext_mv, _, _ = compute_ccicn(
         traces_fext, 'FEXT', fb_hz, a_ft_mv, il_post_db, tr_s,
         il_pre_nyquist_db=il_pre_db,
+        alpha_pre=alpha_pre, alpha_post=alpha_post,
     )
 
 st.subheader("ccICN 計算結果")
@@ -266,23 +321,18 @@ if n_metrics:
     mcols = st.columns(n_metrics)
     ci = 0
     if ccicn_next_mv is not None:
-        n_paths = len(all_next_traces)
         with mcols[ci]:
             st.metric("ccICN_NEXT", f"{ccicn_next_mv:.3f} mV",
-                      help=f"{n_paths} 條路徑 Power Sum")
+                      help=f"{len(all_next_traces)} 條路徑 Power Sum")
         ci += 1
     if ccicn_fext_mv is not None:
-        n_paths = len(all_fext_traces)
         with mcols[ci]:
             st.metric("ccICN_FEXT", f"{ccicn_fext_mv:.3f} mV",
-                      help=f"{n_paths} 條路徑 Power Sum")
+                      help=f"{len(all_fext_traces)} 條路徑 Power Sum")
 
 
 # ── Plot helper ────────────────────────────────────────────────────────────────
 def _make_xt_fig(title: str, all_traces: list, ps_color: str) -> go.Figure:
-    """
-    all_traces: [(display_label, freq_hz, freq_ghz, s_complex), ...]
-    """
     fig = go.Figure()
     if not all_traces:
         fig.update_layout(
@@ -302,15 +352,15 @@ def _make_xt_fig(title: str, all_traces: list, ps_color: str) -> go.Figure:
             line=dict(color=_COLORS[i % len(_COLORS)], width=1.5),
         ))
 
-    # Combined power sum on reference grid (first trace's freq_ghz)
-    ref_freq_hz  = all_traces[0][1]
-    ref_freq_ghz = all_traces[0][2]
-    ps_power = np.zeros(len(ref_freq_hz))
+    # Combined power sum on first trace's freq grid
+    ref_fhz  = all_traces[0][1]
+    ref_fghz = all_traces[0][2]
+    ps_power = np.zeros(len(ref_fhz))
     for _, fhz, _, s in all_traces:
-        ps_power += np.interp(ref_freq_hz, fhz, np.abs(s) ** 2)
+        ps_power += np.interp(ref_fhz, fhz, np.abs(s) ** 2)
     ps_db = 20 * np.log10(np.sqrt(ps_power) + 1e-15)
     fig.add_trace(go.Scatter(
-        x=ref_freq_ghz, y=ps_db,
+        x=ref_fghz, y=ps_db,
         name=f"PS{title} (Combined)",
         line=dict(color=ps_color, width=2.5),
     ))

@@ -9,15 +9,21 @@ def compute_ccicn(
     il_post_nyquist_db: float,
     tr_s: float,
     il_pre_nyquist_db: float = 0.0,
+    alpha_pre: float = 1.0,
+    alpha_post: float = 1.0,
     nyquist_factor: float = 1.5,
     df_hz: float = 10e6,
 ) -> tuple:
     """
     Compute ccICN RMS noise by frequency-domain integration.
 
-    traces : list of (freq_hz_array, s_complex_array) — one per NEXT/FEXT path,
-             may come from different files with different frequency grids.
+    traces : list of (freq_hz_array, s_complex_or_magnitude_array)
+             May come from different files with different frequency grids.
     mode   : 'NEXT' or 'FEXT'
+
+    IL model: IL(f) = IL_ref × (f / f_nyquist)^alpha  [dB, negative]
+      alpha=1.0  → linear (dielectric loss)
+      alpha=0.5  → √f   (skin effect)
 
     FEXT: uses IL_pre + IL_post, amplitude A_FT
     NEXT: uses 2 × IL_post,      amplitude A_NT
@@ -30,15 +36,16 @@ def compute_ccicn(
 
     freqs = np.arange(df_hz, fr_hz + df_hz / 2, df_hz)
 
-    # Power-sum: interpolate each trace to sweep grid individually, then sum
+    # Power-sum: interpolate each trace individually, then sum
     ps_power = np.zeros(len(freqs))
     for freq_snp_hz, s in traces:
         ps_power += np.interp(freqs, freq_snp_hz, np.abs(s) ** 2)
 
-    # IL model (linear in frequency, dB)
-    il_post = il_post_nyquist_db * (freqs / nyquist_hz)
+    # IL model with exponent
+    f_ratio    = freqs / nyquist_hz
+    il_post    = il_post_nyquist_db * (f_ratio ** alpha_post)
     if mode == 'FEXT':
-        il_pre   = il_pre_nyquist_db * (freqs / nyquist_hz)
+        il_pre   = il_pre_nyquist_db * (f_ratio ** alpha_pre)
         ch_power = 10 ** ((il_pre + il_post) / 10)
     else:
         ch_power = 10 ** (2 * il_post / 10)

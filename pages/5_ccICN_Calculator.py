@@ -141,6 +141,13 @@ with st.sidebar:
             accept_multiple_files=True, key="ccicn_nx_csv",
         )
         st.caption("格式：Frequency_GHz, Magnitude_dB")
+        if next_csv_files:
+            _nx_names = [f.name for f in next_csv_files]
+            next_csv_sel = st.multiselect(
+                "納入 Power Sum", _nx_names, default=_nx_names, key="ccicn_nx_csv_sel",
+            )
+        else:
+            next_csv_sel = []
 
         st.subheader("FEXT CSV")
         fext_csv_files = st.file_uploader(
@@ -148,6 +155,13 @@ with st.sidebar:
             accept_multiple_files=True, key="ccicn_fx_csv",
         )
         st.caption("格式：Frequency_GHz, Magnitude_dB")
+        if fext_csv_files:
+            _fx_names = [f.name for f in fext_csv_files]
+            fext_csv_sel = st.multiselect(
+                "納入 Power Sum", _fx_names, default=_fx_names, key="ccicn_fx_csv_sel",
+            )
+        else:
+            fext_csv_sel = []
 
     # ════════════════════ ccICN 參數 (共用) ════════════════════
     st.divider()
@@ -300,8 +314,12 @@ else:
                 st.error(f"**{uf.name}** [{kind}] 讀取失敗：{e}")
         return out
 
-    all_next_traces = _load_csv_traces(next_csv_files, "NEXT")
-    all_fext_traces = _load_csv_traces(fext_csv_files, "FEXT")
+    all_next_traces = _load_csv_traces(
+        [f for f in (next_csv_files or []) if f.name in next_csv_sel], "NEXT"
+    )
+    all_fext_traces = _load_csv_traces(
+        [f for f in (fext_csv_files or []) if f.name in fext_csv_sel], "FEXT"
+    )
 
 # ── 共同：無路徑時停止 ────────────────────────────────────────────────────────
 if not all_next_traces and not all_fext_traces:

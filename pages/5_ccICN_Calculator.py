@@ -192,31 +192,33 @@ with st.sidebar:
     tr_s   = TR_PS * 1e-12
     ft_ghz = 0.2365 / tr_s / 1e9
     fr_ghz = 1.5 * (FB_GBAUD / 2)
-    a_nt_mv = p["a_nt"]
+
+    # Single unified table — reset on preset change via dynamic key
+    _defaults = pd.DataFrame({
+        "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
+                      "Rise Time Tᵣ", "σ_x²", "IL_pre", "IL_post"],
+        "Value":     [FB_GBAUD, A_FT_MV, p["a_nt"],
+                      TR_PS, p["sigma_x2"], p["il_pre"], p["il_post"]],
+        "Unit":      ["GBaud", "mVpp", "mVpp",
+                      "ps", "–", "dB", "dB"],
+    })
+    _edited = st.data_editor(
+        _defaults, hide_index=True, use_container_width=True,
+        key=f"ccicn_params_{preset_name}",
+        disabled=["Parameter", "Unit"],
+        column_config={
+            "Value": st.column_config.NumberColumn(label="Value", format="%.4g")
+        },
+    )
+
+    a_nt_mv    = float(_edited.iloc[2]["Value"])
+    sigma_x2   = float(_edited.iloc[4]["Value"])
+    il_pre_db  = float(_edited.iloc[5]["Value"])
+    il_post_db = float(_edited.iloc[6]["Value"])
 
     _td = "padding:4px 8px;border:1px solid #555;"
     st.markdown(f"""
-<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:6px">
-  <tr>
-    <td style="{_td}">Symbol Rate fb</td>
-    <td style="{_td};text-align:right;color:#555;">{FB_GBAUD:.4g}</td>
-    <td style="{_td};color:#888;">GBaud</td>
-  </tr>
-  <tr>
-    <td style="{_td}">A_FT</td>
-    <td style="{_td};text-align:right;color:#555;">{A_FT_MV:.4g}</td>
-    <td style="{_td};color:#888;">mVpp</td>
-  </tr>
-  <tr>
-    <td style="{_td}">A_NT</td>
-    <td style="{_td};text-align:right;color:#555;">{a_nt_mv:.4g}</td>
-    <td style="{_td};color:#888;">mVpp</td>
-  </tr>
-  <tr>
-    <td style="{_td}">Rise Time Tᵣ</td>
-    <td style="{_td};text-align:right;color:#555;">{TR_PS:.4g}</td>
-    <td style="{_td};color:#888;">ps</td>
-  </tr>
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:4px">
   <tr>
     <td style="{_td}">ft = 0.2365 / Tᵣ</td>
     <td style="{_td};text-align:right;color:#555;">{ft_ghz:.2f}</td>
@@ -229,25 +231,6 @@ with st.sidebar:
   </tr>
 </table>
 """, unsafe_allow_html=True)
-
-    # Editable: σ_x², IL_pre, IL_post — reset when preset changes via dynamic key
-    _il_defaults = pd.DataFrame({
-        "Parameter": ["σ_x²",          "IL_pre",      "IL_post"],
-        "Value":     [p["sigma_x2"],    p["il_pre"],   p["il_post"]],
-        "Unit":      ["–",              "dB",          "dB"],
-    })
-    _il_edited = st.data_editor(
-        _il_defaults, hide_index=True, use_container_width=True,
-        key=f"ccicn_params_{preset_name}",
-        disabled=["Parameter", "Unit"],
-        column_config={
-            "Value": st.column_config.NumberColumn(label="Value", format="%.4g")
-        },
-    )
-
-    sigma_x2   = float(_il_edited.iloc[0]["Value"])
-    il_pre_db  = float(_il_edited.iloc[1]["Value"])
-    il_post_db = float(_il_edited.iloc[2]["Value"])
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -9,19 +9,21 @@ def compute_ccicn(
     il_post_db: float,
     tr_s: float,
     il_pre_db: float = 0.0,
+    sigma_x2: float = 1.0,
     nyquist_factor: float = 1.5,
     df_hz: float = 10e6,
 ) -> tuple:
     """
     Compute ccICN RMS noise by frequency-domain integration.
 
-    traces : list of (freq_hz_array, s_complex_or_magnitude_array)
-             May come from different files with different frequency grids.
-    mode   : 'NEXT' or 'FEXT'
+    traces   : list of (freq_hz_array, s_complex_or_magnitude_array)
+    mode     : 'NEXT' or 'FEXT'
+    sigma_x2 : signal variance σ_x² (normalized, default 1.0)
 
-    IL_pre and IL_post are fixed dB values (no frequency scaling).
-    FEXT: ch_power = 10^((IL_pre + IL_post) / 10)
-    NEXT: ch_power = 10^(2 × IL_post / 10)
+    IL scales linearly with frequency (α=1 fixed):
+      IL(f) = IL_ref × (f / f_Nyquist)
+    FEXT: ch_power = 10^((IL_pre(f) + IL_post(f)) / 10)
+    NEXT: ch_power = 10^(2 × IL_post(f) / 10)
 
     Returns: (ccicn_mv_rms, freq_ghz_grid, integrand)
     """
@@ -36,15 +38,18 @@ def compute_ccicn(
     for freq_snp_hz, s in traces:
         ps_power += np.interp(freqs, freq_snp_hz, np.abs(s) ** 2)
 
-    # IL as fixed constants (user-defined)
+    # IL with linear frequency scaling (α=1 fixed per spec)
+    f_ratio    = freqs / nyquist_hz
+    il_post_f  = il_post_db * f_ratio
     if mode == 'FEXT':
-        ch_power = 10 ** ((il_pre_db + il_post_db) / 10)
+        il_pre_f = il_pre_db * f_ratio
+        ch_power = 10 ** ((il_pre_f + il_post_f) / 10)
     else:
-        ch_power = 10 ** (2 * il_post_db / 10)
+        ch_power = 10 ** (2 * il_post_f / 10)
 
-    # Signal PSD (σ_x² = 1)
+    # Signal PSD with σ_x²
     a_v = a_mv * 1e-3
-    psd = (a_v ** 2) / fb_hz * np.sinc(freqs / fb_hz) ** 2
+    psd = sigma_x2 * (a_v ** 2) / fb_hz * np.sinc(freqs / fb_hz) ** 2
 
     # TX 4th-order + RX 8th-order Butterworth magnitude²
     h_tx2 = 1.0 / (1 + (freqs / ft_hz) ** 4)

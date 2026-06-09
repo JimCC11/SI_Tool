@@ -220,11 +220,11 @@ with st.sidebar:
 </table>
 """, unsafe_allow_html=True)
 
-    # Editable: IL_pre / IL_post only
+    # Editable: σ_x², IL_pre, IL_post
     _il_defaults = pd.DataFrame({
-        "Parameter": ["IL_pre", "IL_post"],
-        "Value":     [-20.0,    -6.0],
-        "Unit":      ["dB",     "dB"],
+        "Parameter": ["σ_x²", "IL_pre", "IL_post"],
+        "Value":     [1.0,    -20.0,    -6.0],
+        "Unit":      ["–",    "dB",     "dB"],
     })
     _il_edited = st.data_editor(
         _il_defaults, hide_index=True, use_container_width=True,
@@ -235,8 +235,9 @@ with st.sidebar:
         },
     )
 
-    il_pre_db  = float(_il_edited.iloc[0]["Value"])
-    il_post_db = float(_il_edited.iloc[1]["Value"])
+    sigma_x2   = float(_il_edited.iloc[0]["Value"])
+    il_pre_db  = float(_il_edited.iloc[1]["Value"])
+    il_post_db = float(_il_edited.iloc[2]["Value"])
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -341,13 +342,14 @@ if all_next_traces:
     traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
     ccicn_next_mv, _, _ = compute_ccicn(
         traces_next, 'NEXT', fb_hz, A_NT_MV, il_post_db, tr_s,
+        sigma_x2=sigma_x2,
     )
 
 if all_fext_traces:
     traces_fext = [(fhz, s) for _, fhz, _, s in all_fext_traces]
     ccicn_fext_mv, _, _ = compute_ccicn(
         traces_fext, 'FEXT', fb_hz, A_FT_MV, il_post_db, tr_s,
-        il_pre_db=il_pre_db,
+        il_pre_db=il_pre_db, sigma_x2=sigma_x2,
     )
 
 st.subheader("ccICN 計算結果")

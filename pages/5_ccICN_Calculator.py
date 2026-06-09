@@ -51,8 +51,14 @@ _PS_FEXT_COLOR = "#b91c1c"
 # Fixed ccICN constants
 FB_GBAUD = 32.0
 A_FT_MV  = 800.0
-A_NT_MV  = 1000.0
 TR_PS    = 7.5
+
+_PRESETS = {
+    "PAM2 Conn": dict(a_nt=1300.0, sigma_x2=1.0,   il_pre=-29.0, il_post=-6.0),
+    "PAM2 CA":   dict(a_nt=1300.0, sigma_x2=1.0,   il_pre=-24.0, il_post=-6.0),
+    "PAM4 Conn": dict(a_nt=1000.0, sigma_x2=5/9,   il_pre=-25.0, il_post=-6.0),
+    "PAM4 CA":   dict(a_nt=1000.0, sigma_x2=5/9,   il_pre=-20.0, il_post=-6.0),
+}
 
 
 def _xax(**kw): return {**_AXIS_BASE, "title": dict(standoff=5), **kw}
@@ -179,10 +185,14 @@ with st.sidebar:
     st.divider()
     st.subheader("ccICN 參數")
 
+    preset_name = st.selectbox("Preset", list(_PRESETS.keys()), key="ccicn_preset")
+    p = _PRESETS[preset_name]
+
     fb_hz  = FB_GBAUD * 1e9
     tr_s   = TR_PS * 1e-12
     ft_ghz = 0.2365 / tr_s / 1e9
     fr_ghz = 1.5 * (FB_GBAUD / 2)
+    a_nt_mv = p["a_nt"]
 
     _td = "padding:4px 8px;border:1px solid #555;"
     st.markdown(f"""
@@ -199,7 +209,7 @@ with st.sidebar:
   </tr>
   <tr>
     <td style="{_td}">A_NT</td>
-    <td style="{_td};text-align:right;color:#555;">{A_NT_MV:.4g}</td>
+    <td style="{_td};text-align:right;color:#555;">{a_nt_mv:.4g}</td>
     <td style="{_td};color:#888;">mVpp</td>
   </tr>
   <tr>
@@ -220,15 +230,15 @@ with st.sidebar:
 </table>
 """, unsafe_allow_html=True)
 
-    # Editable: σ_x², IL_pre, IL_post
+    # Editable: σ_x², IL_pre, IL_post — reset when preset changes via dynamic key
     _il_defaults = pd.DataFrame({
-        "Parameter": ["σ_x²", "IL_pre", "IL_post"],
-        "Value":     [1.0,    -20.0,    -6.0],
-        "Unit":      ["–",    "dB",     "dB"],
+        "Parameter": ["σ_x²",          "IL_pre",      "IL_post"],
+        "Value":     [p["sigma_x2"],    p["il_pre"],   p["il_post"]],
+        "Unit":      ["–",              "dB",          "dB"],
     })
     _il_edited = st.data_editor(
         _il_defaults, hide_index=True, use_container_width=True,
-        key="ccicn_params",
+        key=f"ccicn_params_{preset_name}",
         disabled=["Parameter", "Unit"],
         column_config={
             "Value": st.column_config.NumberColumn(label="Value", format="%.4g")
@@ -341,7 +351,7 @@ ccicn_next_mv = ccicn_fext_mv = None
 if all_next_traces:
     traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
     ccicn_next_mv, _, _ = compute_ccicn(
-        traces_next, 'NEXT', fb_hz, A_NT_MV, il_post_db, tr_s,
+        traces_next, 'NEXT', fb_hz, a_nt_mv, il_post_db, tr_s,
         sigma_x2=sigma_x2,
     )
 

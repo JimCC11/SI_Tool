@@ -189,12 +189,12 @@ with st.sidebar:
   </tr>
   <tr>
     <td style="{_td}">ft = 0.2365 / Tᵣ</td>
-    <td style="{_td};text-align:right;font-weight:bold;color:#2563eb;">{ft_ghz:.2f}</td>
+    <td style="{_td};text-align:right;color:#555;">{ft_ghz:.2f}</td>
     <td style="{_td};color:#888;">GHz</td>
   </tr>
   <tr>
     <td style="{_td}">fr = 1.5 × Nyquist</td>
-    <td style="{_td};text-align:right;font-weight:bold;color:#2563eb;">{fr_ghz:.2f}</td>
+    <td style="{_td};text-align:right;color:#555;">{fr_ghz:.2f}</td>
     <td style="{_td};color:#888;">GHz</td>
   </tr>
 </table>

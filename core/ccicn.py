@@ -2,8 +2,7 @@ import numpy as np
 
 
 def compute_ccicn(
-    freq_snp_hz: np.ndarray,
-    s_list: list,
+    traces: list,
     mode: str,
     fb_hz: float,
     a_mv: float,
@@ -16,11 +15,12 @@ def compute_ccicn(
     """
     Compute ccICN RMS noise by frequency-domain integration.
 
-    s_list : list of complex S-param arrays (one per NEXT/FEXT path)
+    traces : list of (freq_hz_array, s_complex_array) — one per NEXT/FEXT path,
+             may come from different files with different frequency grids.
     mode   : 'NEXT' or 'FEXT'
 
-    FEXT: integrand uses IL_pre + IL_post, amplitude A_FT
-    NEXT: integrand uses 2 × IL_post,      amplitude A_NT
+    FEXT: uses IL_pre + IL_post, amplitude A_FT
+    NEXT: uses 2 × IL_post,      amplitude A_NT
 
     Returns: (ccicn_mv_rms, freq_ghz_grid, integrand)
     """
@@ -30,9 +30,10 @@ def compute_ccicn(
 
     freqs = np.arange(df_hz, fr_hz + df_hz / 2, df_hz)
 
-    # Power-sum of all paths, then interpolate to sweep grid
-    ps_power_snp = np.sum([np.abs(s) ** 2 for s in s_list], axis=0)
-    ps_power     = np.interp(freqs, freq_snp_hz, ps_power_snp)
+    # Power-sum: interpolate each trace to sweep grid individually, then sum
+    ps_power = np.zeros(len(freqs))
+    for freq_snp_hz, s in traces:
+        ps_power += np.interp(freqs, freq_snp_hz, np.abs(s) ** 2)
 
     # IL model (linear in frequency, dB)
     il_post = il_post_nyquist_db * (freqs / nyquist_hz)

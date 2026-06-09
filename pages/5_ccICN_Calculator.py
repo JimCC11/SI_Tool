@@ -93,7 +93,7 @@ with st.sidebar:
 
     n_pairs = _n_pairs_from_name(uploaded_sp[0].name) if uploaded_sp else 1
 
-    # Build NEXT / FEXT option lists from n_pairs
+    # Build NEXT/FEXT option lists
     next_options, next_map = [], {}
     fext_options, fext_map = [], {}
     for a in range(n_pairs):
@@ -104,24 +104,25 @@ with st.sidebar:
                 next_options.append(nl); next_map[nl] = (a, v)
                 fext_options.append(fl); fext_map[fl] = (a, v)
 
-    if uploaded_sp:
+    # ── Per-file NEXT / FEXT path selection ──
+    file_next_sel = {}   # {filename: [selected labels]}
+    file_fext_sel = {}
+
+    if uploaded_sp and n_pairs >= 2:
         st.caption(f"偵測：{n_pairs * 4}-port → {n_pairs} 差分對")
-
-    st.subheader("NEXT")
-    if n_pairs < 2:
+        for uf in uploaded_sp:
+            st.divider()
+            st.caption(f"📄 **{uf.name}**")
+            file_next_sel[uf.name] = st.multiselect(
+                "NEXT", next_options, default=[],
+                key=f"ccicn_nx_{uf.name}",
+            )
+            file_fext_sel[uf.name] = st.multiselect(
+                "FEXT", fext_options, default=[],
+                key=f"ccicn_fx_{uf.name}",
+            )
+    elif n_pairs < 2:
         st.caption("需要 ≥ 2 差分對")
-        sel_next = []
-    else:
-        sel_next = st.multiselect("NEXT 路徑", next_options,
-                                  default=next_options, key="ccicn_nx")
-
-    st.subheader("FEXT")
-    if n_pairs < 2:
-        st.caption("需要 ≥ 2 差分對")
-        sel_fext = []
-    else:
-        sel_fext = st.multiselect("FEXT 路徑", fext_options,
-                                  default=fext_options, key="ccicn_fx")
 
     st.divider()
     st.subheader("Port Mapping")
@@ -188,8 +189,12 @@ if n_pairs < 2:
     st.warning("需要 ≥ 2 對差分對的 SNP 檔案（S8P 以上）")
     st.stop()
 
+# all_next_traces / all_fext_traces: combined list across all files
+# each entry: (display_label, freq_hz, freq_ghz, s_complex)
+all_next_traces = []
+all_fext_traces = []
+
 tmp_paths = []
-results   = []
 try:
     for uf in uploaded_sp:
         ext = uf.name.lower().rsplit('.', 1)[-1]
@@ -205,37 +210,28 @@ try:
             s_mm     = (single_to_mixed_mode(s_se, mapping=mapping) if n_p == 1
                         else single_to_mixed_mode_npairs(s_se, n_pairs=n_p, mapping=mapping))
 
-            next_traces, fext_traces = {}, {}
-            for lbl in sel_next:
+            fname = uf.name
+            multi = len(uploaded_sp) > 1
+
+            for lbl in file_next_sel.get(fname, []):
                 a, v = next_map[lbl]
                 if a < n_p and v < n_p:
-                    next_traces[lbl] = s_mm[:, 4*v, 4*a]
-            for lbl in sel_fext:
+                    s = s_mm[:, 4*v, 4*a]
+                    disp = f"{fname}  {lbl}" if multi else lbl
+                    all_next_traces.append((disp, freq_hz, freq_ghz, s))
+
+            for lbl in file_fext_sel.get(fname, []):
                 a, v = fext_map[lbl]
                 if a < n_p and v < n_p:
-                    fext_traces[lbl] = s_mm[:, 4*v+1, 4*a]
+                    s = s_mm[:, 4*v+1, 4*a]
+                    disp = f"{fname}  {lbl}" if multi else lbl
+                    all_fext_traces.append((disp, freq_hz, freq_ghz, s))
 
-            ccicn_next_mv = ccicn_fext_mv = None
-            if next_traces:
-                ccicn_next_mv, _, _ = compute_ccicn(
-                    freq_hz, list(next_traces.values()), 'NEXT',
-                    fb_hz, a_nt_mv, il_post_db, tr_s,
-                )
-            if fext_traces:
-                ccicn_fext_mv, _, _ = compute_ccicn(
-                    freq_hz, list(fext_traces.values()), 'FEXT',
-                    fb_hz, a_ft_mv, il_post_db, tr_s,
-                    il_pre_nyquist_db=il_pre_db,
-                )
-
-            results.append({
-                "label": uf.name, "freq_hz": freq_hz, "freq_ghz": freq_ghz,
-                "next_traces": next_traces, "fext_traces": fext_traces,
-                "ccicn_next_mv": ccicn_next_mv, "ccicn_fext_mv": ccicn_fext_mv,
-            })
             st.success(
-                f"**{uf.name}** — {n_p} 差分對 | "
-                f"{freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz"
+                f"**{fname}** — {n_p} 差分對 | "
+                f"{freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz | "
+                f"NEXT: {len(file_next_sel.get(fname,[]))} 路徑, "
+                f"FEXT: {len(file_fext_sel.get(fname,[]))} 路徑"
             )
         except Exception as e:
             st.error(f"**{uf.name}** 讀取失敗：{e}")
@@ -244,61 +240,80 @@ finally:
         try: os.unlink(p)
         except Exception: pass
 
-if not results:
+if not all_next_traces and not all_fext_traces:
+    st.info("← 請從左側各檔案選擇 NEXT / FEXT 路徑")
     st.stop()
 
 # ── ccICN 計算結果 ────────────────────────────────────────────────────────────
+ccicn_next_mv = ccicn_fext_mv = None
+
+if all_next_traces:
+    traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
+    ccicn_next_mv, _, _ = compute_ccicn(
+        traces_next, 'NEXT', fb_hz, a_nt_mv, il_post_db, tr_s,
+    )
+
+if all_fext_traces:
+    traces_fext = [(fhz, s) for _, fhz, _, s in all_fext_traces]
+    ccicn_fext_mv, _, _ = compute_ccicn(
+        traces_fext, 'FEXT', fb_hz, a_ft_mv, il_post_db, tr_s,
+        il_pre_nyquist_db=il_pre_db,
+    )
+
 st.subheader("ccICN 計算結果")
-n_metrics = sum(
-    (1 if r["ccicn_next_mv"] is not None else 0) +
-    (1 if r["ccicn_fext_mv"] is not None else 0)
-    for r in results
-)
+n_metrics = (1 if ccicn_next_mv is not None else 0) + (1 if ccicn_fext_mv is not None else 0)
 if n_metrics:
     mcols = st.columns(n_metrics)
-    ci    = 0
-    multi = len(results) > 1
-    for r in results:
-        pfx = f"{r['label']} " if multi else ""
-        if r["ccicn_next_mv"] is not None:
-            with mcols[ci]:
-                st.metric(f"{pfx}ccICN_NEXT", f"{r['ccicn_next_mv']:.3f} mV")
-            ci += 1
-        if r["ccicn_fext_mv"] is not None:
-            with mcols[ci]:
-                st.metric(f"{pfx}ccICN_FEXT", f"{r['ccicn_fext_mv']:.3f} mV")
-            ci += 1
-
-f_max = float(results[0]["freq_ghz"][-1])
+    ci = 0
+    if ccicn_next_mv is not None:
+        n_paths = len(all_next_traces)
+        with mcols[ci]:
+            st.metric("ccICN_NEXT", f"{ccicn_next_mv:.3f} mV",
+                      help=f"{n_paths} 條路徑 Power Sum")
+        ci += 1
+    if ccicn_fext_mv is not None:
+        n_paths = len(all_fext_traces)
+        with mcols[ci]:
+            st.metric("ccICN_FEXT", f"{ccicn_fext_mv:.3f} mV",
+                      help=f"{n_paths} 條路徑 Power Sum")
 
 
 # ── Plot helper ────────────────────────────────────────────────────────────────
-def _make_xt_fig(title: str, traces_key: str, ps_color: str) -> go.Figure:
+def _make_xt_fig(title: str, all_traces: list, ps_color: str) -> go.Figure:
+    """
+    all_traces: [(display_label, freq_hz, freq_ghz, s_complex), ...]
+    """
     fig = go.Figure()
-    ci  = 0
-    multi = len(results) > 1
+    if not all_traces:
+        fig.update_layout(
+            title=dict(text=title, x=0.5, xanchor="center"),
+            annotations=[dict(text="尚未選擇路徑", xref="paper", yref="paper",
+                              x=0.5, y=0.5, showarrow=False, font=dict(size=18))],
+            **_LAYOUT,
+        )
+        return fig
 
-    for r in results:
-        tdict = r[traces_key]
-        if not tdict:
-            continue
-        pfx = f"{r['label']} " if multi else ""
-        for lbl, s in tdict.items():
-            md_db = 20 * np.log10(np.abs(s) + 1e-15)
-            fig.add_trace(go.Scatter(
-                x=r["freq_ghz"], y=md_db,
-                name=f"{pfx}{lbl}",
-                line=dict(color=_COLORS[ci % len(_COLORS)], width=1.5),
-            ))
-            ci += 1
-        # Power sum
-        ps    = np.sqrt(np.sum([np.abs(s) ** 2 for s in tdict.values()], axis=0))
-        ps_db = 20 * np.log10(ps + 1e-15)
+    f_max = min(float(t[2][-1]) for t in all_traces)
+
+    for i, (lbl, _, freq_ghz, s) in enumerate(all_traces):
+        md_db = 20 * np.log10(np.abs(s) + 1e-15)
         fig.add_trace(go.Scatter(
-            x=r["freq_ghz"], y=ps_db,
-            name=f"{pfx}PS{title}",
-            line=dict(color=ps_color, width=2.5),
+            x=freq_ghz, y=md_db, name=lbl,
+            line=dict(color=_COLORS[i % len(_COLORS)], width=1.5),
         ))
+
+    # Combined power sum on reference grid (first trace's freq_ghz)
+    ref_freq_hz  = all_traces[0][1]
+    ref_freq_ghz = all_traces[0][2]
+    ps_power = np.zeros(len(ref_freq_hz))
+    for _, fhz, _, s in all_traces:
+        ps_power += np.interp(ref_freq_hz, fhz, np.abs(s) ** 2)
+    ps_db = 20 * np.log10(np.sqrt(ps_power) + 1e-15)
+    fig.add_trace(go.Scatter(
+        x=ref_freq_ghz, y=ps_db,
+        name=f"PS{title} (Combined)",
+        line=dict(color=ps_color, width=2.5),
+    ))
 
     fig.add_hline(y=0,     line=_BL)
     fig.add_hline(y=-80,   line=_BL)
@@ -316,8 +331,8 @@ def _make_xt_fig(title: str, traces_key: str, ps_color: str) -> go.Figure:
 
 col1, col2 = st.columns(2)
 with col1:
-    st.plotly_chart(_make_xt_fig("PSNEXT", "next_traces", _PS_NEXT_COLOR),
+    st.plotly_chart(_make_xt_fig("PSNEXT", all_next_traces, _PS_NEXT_COLOR),
                     use_container_width=True)
 with col2:
-    st.plotly_chart(_make_xt_fig("PSFEXT", "fext_traces", _PS_FEXT_COLOR),
+    st.plotly_chart(_make_xt_fig("PSFEXT", all_fext_traces, _PS_FEXT_COLOR),
                     use_container_width=True)

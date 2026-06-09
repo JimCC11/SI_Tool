@@ -153,19 +153,61 @@ with st.sidebar:
     st.divider()
     st.subheader("ccICN 參數")
 
-    _defaults = pd.DataFrame({
-        "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
-                      "IL_pre", "IL_post",
-                      "Rise Time Tᵣ"],
-        "Value":     [32.0,    800.0,  1000.0,
-                      -20.0,   -6.0,
-                      7.5],
-        "Unit":      ["GBaud", "mVpp", "mVpp",
-                      "dB",    "dB",
-                      "ps"],
+    # Fixed constants
+    FB_GBAUD = 32.0
+    A_FT_MV  = 800.0
+    A_NT_MV  = 1000.0
+    TR_PS    = 7.5
+
+    fb_hz  = FB_GBAUD * 1e9
+    tr_s   = TR_PS * 1e-12
+    ft_ghz = 0.2365 / tr_s / 1e9
+    fr_ghz = 1.5 * (FB_GBAUD / 2)
+
+    _td = "padding:4px 8px;border:1px solid #555;"
+    st.markdown(f"""
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:6px">
+  <tr>
+    <td style="{_td}">Symbol Rate fb</td>
+    <td style="{_td};text-align:right;color:#555;">{FB_GBAUD:.4g}</td>
+    <td style="{_td};color:#888;">GBaud</td>
+  </tr>
+  <tr>
+    <td style="{_td}">A_FT</td>
+    <td style="{_td};text-align:right;color:#555;">{A_FT_MV:.4g}</td>
+    <td style="{_td};color:#888;">mVpp</td>
+  </tr>
+  <tr>
+    <td style="{_td}">A_NT</td>
+    <td style="{_td};text-align:right;color:#555;">{A_NT_MV:.4g}</td>
+    <td style="{_td};color:#888;">mVpp</td>
+  </tr>
+  <tr>
+    <td style="{_td}">Rise Time Tᵣ</td>
+    <td style="{_td};text-align:right;color:#555;">{TR_PS:.4g}</td>
+    <td style="{_td};color:#888;">ps</td>
+  </tr>
+  <tr>
+    <td style="{_td}">ft = 0.2365 / Tᵣ</td>
+    <td style="{_td};text-align:right;font-weight:bold;color:#2563eb;">{ft_ghz:.2f}</td>
+    <td style="{_td};color:#888;">GHz</td>
+  </tr>
+  <tr>
+    <td style="{_td}">fr = 1.5 × Nyquist</td>
+    <td style="{_td};text-align:right;font-weight:bold;color:#2563eb;">{fr_ghz:.2f}</td>
+    <td style="{_td};color:#888;">GHz</td>
+  </tr>
+</table>
+""", unsafe_allow_html=True)
+
+    # Editable: IL_pre / IL_post only
+    _il_defaults = pd.DataFrame({
+        "Parameter": ["IL_pre", "IL_post"],
+        "Value":     [-20.0,    -6.0],
+        "Unit":      ["dB",     "dB"],
     })
-    _edited = st.data_editor(
-        _defaults, hide_index=True, use_container_width=True,
+    _il_edited = st.data_editor(
+        _il_defaults, hide_index=True, use_container_width=True,
         key="ccicn_params",
         disabled=["Parameter", "Unit"],
         column_config={
@@ -173,34 +215,8 @@ with st.sidebar:
         },
     )
 
-    fb_gbaud   = float(_edited.iloc[0]["Value"])
-    a_ft_mv    = float(_edited.iloc[1]["Value"])
-    a_nt_mv    = float(_edited.iloc[2]["Value"])
-    il_pre_db  = float(_edited.iloc[3]["Value"])
-    il_post_db = float(_edited.iloc[4]["Value"])
-    tr_ps      = float(_edited.iloc[5]["Value"])
-
-    fb_hz  = fb_gbaud * 1e9
-    tr_s   = tr_ps * 1e-12
-    ft_ghz = 0.2365 / tr_s / 1e9
-    fr_ghz = 1.5 * (fb_gbaud / 2)
-
-    st.markdown(f"""
-<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:2px">
-  <tr>
-    <td style="padding:4px 8px;border:1px solid #555;">ft = 0.2365 / Tᵣ</td>
-    <td style="padding:4px 8px;border:1px solid #555;text-align:right;
-               font-weight:bold;color:#2563eb;">{ft_ghz:.2f}</td>
-    <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>
-  </tr>
-  <tr>
-    <td style="padding:4px 8px;border:1px solid #555;">fr = 1.5 × Nyquist</td>
-    <td style="padding:4px 8px;border:1px solid #555;text-align:right;
-               font-weight:bold;color:#2563eb;">{fr_ghz:.2f}</td>
-    <td style="padding:4px 8px;border:1px solid #555;color:#666;">GHz</td>
-  </tr>
-</table>
-""", unsafe_allow_html=True)
+    il_pre_db  = float(_il_edited.iloc[0]["Value"])
+    il_post_db = float(_il_edited.iloc[1]["Value"])
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

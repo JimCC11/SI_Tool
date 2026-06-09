@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 
@@ -47,6 +48,12 @@ _COLORS = [
 _PS_NEXT_COLOR = "#1d4ed8"
 _PS_FEXT_COLOR = "#b91c1c"
 
+# Fixed ccICN constants
+FB_GBAUD = 32.0
+A_FT_MV  = 800.0
+A_NT_MV  = 1000.0
+TR_PS    = 7.5
+
 
 def _xax(**kw): return {**_AXIS_BASE, "title": dict(standoff=5), **kw}
 def _yax(**kw): return {**_AXIS_BASE, **kw}
@@ -78,6 +85,17 @@ def _port_map_html(n_pairs: int, mapping: str) -> str:
         )
     rows.append("</table>")
     return "".join(rows)
+
+
+def _csv_col_names(csv_file) -> list:
+    """Return column names for columns B onward (index 1+) from an uploaded CSV."""
+    if csv_file is None:
+        return []
+    try:
+        df = pd.read_csv(io.BytesIO(csv_file.getvalue()), nrows=0)
+        return list(df.columns[1:])
+    except Exception:
+        return []
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -136,42 +154,30 @@ with st.sidebar:
     # ════════════════════ CSV mode ════════════════════
     else:
         st.subheader("NEXT CSV")
-        next_csv_files = st.file_uploader(
-            "上傳 NEXT CSV 檔案", type=["csv"],
-            accept_multiple_files=True, key="ccicn_nx_csv",
+        next_csv_file = st.file_uploader(
+            "上傳 NEXT CSV", type=["csv"],
+            accept_multiple_files=False, key="ccicn_nx_csv",
         )
-        st.caption("格式：Frequency_GHz, Magnitude_dB")
-        if next_csv_files:
-            _nx_names = [f.name for f in next_csv_files]
-            next_csv_sel = st.multiselect(
-                "納入 Power Sum", _nx_names, default=_nx_names, key="ccicn_nx_csv_sel",
-            )
-        else:
-            next_csv_sel = []
+        st.caption("Col A = Frequency_GHz，Col B、C… = Magnitude_dB")
+        _nx_cols = _csv_col_names(next_csv_file)
+        next_csv_sel = st.multiselect(
+            "納入 Power Sum", _nx_cols, default=_nx_cols, key="ccicn_nx_csv_sel",
+        ) if _nx_cols else []
 
         st.subheader("FEXT CSV")
-        fext_csv_files = st.file_uploader(
-            "上傳 FEXT CSV 檔案", type=["csv"],
-            accept_multiple_files=True, key="ccicn_fx_csv",
+        fext_csv_file = st.file_uploader(
+            "上傳 FEXT CSV", type=["csv"],
+            accept_multiple_files=False, key="ccicn_fx_csv",
         )
-        st.caption("格式：Frequency_GHz, Magnitude_dB")
-        if fext_csv_files:
-            _fx_names = [f.name for f in fext_csv_files]
-            fext_csv_sel = st.multiselect(
-                "納入 Power Sum", _fx_names, default=_fx_names, key="ccicn_fx_csv_sel",
-            )
-        else:
-            fext_csv_sel = []
+        st.caption("Col A = Frequency_GHz，Col B、C… = Magnitude_dB")
+        _fx_cols = _csv_col_names(fext_csv_file)
+        fext_csv_sel = st.multiselect(
+            "納入 Power Sum", _fx_cols, default=_fx_cols, key="ccicn_fx_csv_sel",
+        ) if _fx_cols else []
 
     # ════════════════════ ccICN 參數 (共用) ════════════════════
     st.divider()
     st.subheader("ccICN 參數")
-
-    # Fixed constants
-    FB_GBAUD = 32.0
-    A_FT_MV  = 800.0
-    A_NT_MV  = 1000.0
-    TR_PS    = 7.5
 
     fb_hz  = FB_GBAUD * 1e9
     tr_s   = TR_PS * 1e-12
@@ -294,32 +300,34 @@ if not csv_mode:
 
 # ══════════════════════ CSV mode ══════════════════════
 else:
-    has_csv = bool(next_csv_files or fext_csv_files)
+    has_csv = bool(next_csv_file or fext_csv_file)
     if not has_csv:
         st.info("← 請從左側上傳 NEXT / FEXT CSV 檔案")
         st.stop()
 
-    def _load_csv_traces(csv_files, kind: str) -> list:
+    def _load_csv_traces(csv_file, selected_cols: list, kind: str) -> list:
+        """Col A = freq_ghz, each selected column = one trace (magnitude dB)."""
         out = []
-        for uf in (csv_files or []):
-            try:
-                df       = pd.read_csv(uf)
-                freq_ghz = df.iloc[:, 0].to_numpy(dtype=float)
-                freq_hz  = freq_ghz * 1e9
-                mag_db   = df.iloc[:, 1].to_numpy(dtype=float)
-                s_mag    = 10 ** (mag_db / 20)
-                out.append((uf.name, freq_hz, freq_ghz, s_mag))
-                st.success(f"**{uf.name}** [{kind}] — {freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz")
-            except Exception as e:
-                st.error(f"**{uf.name}** [{kind}] 讀取失敗：{e}")
+        if not csv_file or not selected_cols:
+            return out
+        try:
+            df       = pd.read_csv(io.BytesIO(csv_file.getvalue()))
+            freq_ghz = df.iloc[:, 0].to_numpy(dtype=float)
+            freq_hz  = freq_ghz * 1e9
+            for col in selected_cols:
+                mag_db = df[col].to_numpy(dtype=float)
+                s_mag  = 10 ** (mag_db / 20)
+                out.append((col, freq_hz, freq_ghz, s_mag))
+            st.success(
+                f"**{csv_file.name}** [{kind}] — {len(selected_cols)} 條路徑 | "
+                f"{freq_ghz[0]:.3f}~{freq_ghz[-1]:.3f} GHz"
+            )
+        except Exception as e:
+            st.error(f"[{kind}] 讀取失敗：{e}")
         return out
 
-    all_next_traces = _load_csv_traces(
-        [f for f in (next_csv_files or []) if f.name in next_csv_sel], "NEXT"
-    )
-    all_fext_traces = _load_csv_traces(
-        [f for f in (fext_csv_files or []) if f.name in fext_csv_sel], "FEXT"
-    )
+    all_next_traces = _load_csv_traces(next_csv_file, next_csv_sel, "NEXT")
+    all_fext_traces = _load_csv_traces(fext_csv_file, fext_csv_sel, "FEXT")
 
 # ── 共同：無路徑時停止 ────────────────────────────────────────────────────────
 if not all_next_traces and not all_fext_traces:
@@ -332,13 +340,13 @@ ccicn_next_mv = ccicn_fext_mv = None
 if all_next_traces:
     traces_next = [(fhz, s) for _, fhz, _, s in all_next_traces]
     ccicn_next_mv, _, _ = compute_ccicn(
-        traces_next, 'NEXT', fb_hz, a_nt_mv, il_post_db, tr_s,
+        traces_next, 'NEXT', fb_hz, A_NT_MV, il_post_db, tr_s,
     )
 
 if all_fext_traces:
     traces_fext = [(fhz, s) for _, fhz, _, s in all_fext_traces]
     ccicn_fext_mv, _, _ = compute_ccicn(
-        traces_fext, 'FEXT', fb_hz, a_ft_mv, il_post_db, tr_s,
+        traces_fext, 'FEXT', fb_hz, A_FT_MV, il_post_db, tr_s,
         il_pre_db=il_pre_db,
     )
 

@@ -61,14 +61,16 @@ def compute_tdr(s11_freq: np.ndarray, freqs_hz: np.ndarray,
 
 
 def compute_tdr_single(s_se: np.ndarray, freqs_hz: np.ndarray,
-                       rise_time_ps: float = 35.0, forward: bool = True) -> tuple:
-    """單端 TDR（Forward: S11，Reverse: S22，Z0 = 50 Ω）"""
+                       rise_time_ps: float = 35.0, forward: bool = True,
+                       z0_se: float = 50.0) -> tuple:
+    """單端 TDR（Forward: S11，Reverse: S22）"""
     s11 = s_se[:, 0, 0] if forward else s_se[:, 1, 1]
-    return compute_tdr(s11, freqs_hz, z0=50.0, rise_time_ps=rise_time_ps)
+    return compute_tdr(s11, freqs_hz, z0=z0_se, rise_time_ps=rise_time_ps)
 
 
 def compute_tdr_diff(s_mm: np.ndarray, freqs_hz: np.ndarray,
-                     rise_time_ps: float = 35.0, forward: bool = True) -> tuple:
-    """差分 TDR（Forward: SDD11，Reverse: SDD22，Z0_diff = 100 Ω）"""
+                     rise_time_ps: float = 35.0, forward: bool = True,
+                     z0_diff: float = 100.0) -> tuple:
+    """差分 TDR（Forward: SDD11，Reverse: SDD22）"""
     sdd = s_mm[:, 0, 0] if forward else s_mm[:, 1, 1]
-    return compute_tdr(sdd, freqs_hz, z0=100.0, rise_time_ps=rise_time_ps)
+    return compute_tdr(sdd, freqs_hz, z0=z0_diff, rise_time_ps=rise_time_ps)

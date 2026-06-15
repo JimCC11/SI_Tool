@@ -8,7 +8,7 @@ import streamlit as st
 
 from core.impedance import compute_tdr_diff, compute_tdr_single
 from core.mixed_mode import get_pair_fd, single_to_mixed_mode_npairs
-from core.parser import get_frequency_ghz, load_snp
+from core.parser import get_frequency_ghz, get_port_z0, load_snp
 from core.plots import (
     plot_impedance,
     plot_insertion_loss,
@@ -60,11 +60,13 @@ def _port_map_html(n_pairs: int, mapping: str) -> str:
 
 
 def _process_snp(tmp_path: str, n_pairs: int, mapping: str, rise_time_ps: float):
-    net  = load_snp(tmp_path)
-    freq = get_frequency_ghz(net)
-    fhz  = net.f
-    s_se = net.s
-    s_mm = single_to_mixed_mode_npairs(s_se, n_pairs, mapping=mapping)
+    net     = load_snp(tmp_path)
+    freq    = get_frequency_ghz(net)
+    fhz     = net.f
+    s_se    = net.s
+    s_mm    = single_to_mixed_mode_npairs(s_se, n_pairs, mapping=mapping)
+    z0_se   = get_port_z0(net)
+    z0_diff = 2.0 * z0_se
 
     pair_labels = [f"Pair {i+1}" for i in range(n_pairs)]
     fd_list, td_list = [], []
@@ -72,10 +74,10 @@ def _process_snp(tmp_path: str, n_pairs: int, mapping: str, rise_time_ps: float)
         fd = get_pair_fd(s_mm, freq, i, pair_labels[i])
         idx   = [4*i, 4*i+1, 4*i+2, 4*i+3]
         s_sub = s_se[:, idx, :][:, :, idx]
-        t_f,  z11_f  = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=True)
-        _,    zdif_f = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=True)
-        t_r,  z11_r  = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=False)
-        _,    zdif_r = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=False)
+        t_f,  z11_f  = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=True,  z0_se=z0_se)
+        _,    zdif_f = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=True,  z0_diff=z0_diff)
+        t_r,  z11_r  = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=False, z0_se=z0_se)
+        _,    zdif_r = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=False, z0_diff=z0_diff)
         td_list.append({
             "t_fwd": t_f,  "z11_fwd":  z11_f,  "zdiff_fwd": zdif_f,
             "t_rev": t_r,  "z11_rev":  z11_r,  "zdiff_rev": zdif_r,
@@ -83,7 +85,7 @@ def _process_snp(tmp_path: str, n_pairs: int, mapping: str, rise_time_ps: float)
         })
         fd_list.append(fd)
 
-    return freq, fhz, s_mm, fd_list, td_list
+    return freq, fhz, s_mm, fd_list, td_list, z0_se
 
 
 def _victim_agg_ui(prefix: str, y_keys: tuple, n_pairs: int, tx_labels: list):
@@ -238,8 +240,8 @@ try:
             tmp.write(uf.getvalue())
             tmp_paths.append(tmp.name)
 
-        freq, fhz, s_mm, fds, tds = _process_snp(tmp_paths[-1], n_pairs, mapping, rise_time_ps)
-        info_lines.append(f"**{uf.name}** {freq[0]:.2f}~{freq[-1]:.2f} GHz")
+        freq, fhz, s_mm, fds, tds, z0_se = _process_snp(tmp_paths[-1], n_pairs, mapping, rise_time_ps)
+        info_lines.append(f"**{uf.name}** {freq[0]:.2f}~{freq[-1]:.2f} GHz | Z0={z0_se:.1f}Ω (SE) / {2*z0_se:.1f}Ω (Diff)")
 
         pfx = f"{stem} " if multi_file else ""
         for k, fd in enumerate(fds):

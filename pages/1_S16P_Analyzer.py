@@ -11,7 +11,7 @@ from core.mixed_mode import (
     get_pair_fd,
     single_to_mixed_mode_npairs,
 )
-from core.parser import get_frequency_ghz, load_s16p
+from core.parser import get_frequency_ghz, get_port_z0, load_s16p
 from core.plots import (
     plot_impedance,
     plot_insertion_loss,
@@ -27,22 +27,23 @@ _IMG_EXPORT = dict(format="png", width=630, height=450, scale=2)
 
 
 def _process_s16p(tmp_path: str, mapping: str, rise_time_ps: float):
-    net    = load_s16p(tmp_path)
-    freq   = get_frequency_ghz(net)
-    fhz    = net.f
-    s_se   = net.s
-    s_mm   = single_to_mixed_mode_npairs(s_se, N_PAIRS, mapping=mapping)
+    net     = load_s16p(tmp_path)
+    freq    = get_frequency_ghz(net)
+    fhz     = net.f
+    s_se    = net.s
+    s_mm    = single_to_mixed_mode_npairs(s_se, N_PAIRS, mapping=mapping)
+    z0_se   = get_port_z0(net)
+    z0_diff = 2.0 * z0_se
 
     fd_list, td_list = [], []
     for i in range(N_PAIRS):
         fd = get_pair_fd(s_mm, freq, i, PAIR_LABELS[i])
-        # extract 4x4 sub-matrix for this pair
-        idx = [4*i, 4*i+1, 4*i+2, 4*i+3]
-        s_sub = s_se[:, np.ix_(idx, idx)[0], np.ix_(idx, idx)[1]] if False else s_se[:, idx, :][:, :, idx]
-        t_f, z11_f = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=True)
-        _,   zdif_f = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=True)
-        t_r, z11_r = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=False)
-        _,   zdif_r = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=False)
+        idx   = [4*i, 4*i+1, 4*i+2, 4*i+3]
+        s_sub = s_se[:, idx, :][:, :, idx]
+        t_f, z11_f = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=True,  z0_se=z0_se)
+        _,   zdif_f = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=True,  z0_diff=z0_diff)
+        t_r, z11_r = compute_tdr_single(s_sub, fhz, rise_time_ps=rise_time_ps, forward=False, z0_se=z0_se)
+        _,   zdif_r = compute_tdr_diff(s_mm[:, 4*i:4*i+4, 4*i:4*i+4], fhz, rise_time_ps=rise_time_ps, forward=False, z0_diff=z0_diff)
         td = {
             "t_fwd": t_f, "z11_fwd": z11_f, "zdiff_fwd": zdif_f,
             "t_rev": t_r, "z11_rev": z11_r, "zdiff_rev": zdif_r,
@@ -51,7 +52,7 @@ def _process_s16p(tmp_path: str, mapping: str, rise_time_ps: float):
         fd_list.append(fd)
         td_list.append(td)
 
-    return freq, fhz, s_mm, fd_list, td_list
+    return freq, fhz, s_mm, fd_list, td_list, z0_se
 
 
 # ── Page config ───────────────────────────────────────────
@@ -261,8 +262,8 @@ try:
             tmp.write(uf.getvalue())
             tmp_paths.append(tmp.name)
 
-        freq, fhz, s_mm, fds, tds = _process_s16p(tmp_paths[-1], mapping, rise_time_ps)
-        info_lines.append(f"**{uf.name}** {freq[0]:.2f}~{freq[-1]:.2f} GHz")
+        freq, fhz, s_mm, fds, tds, z0_se = _process_s16p(tmp_paths[-1], mapping, rise_time_ps)
+        info_lines.append(f"**{uf.name}** {freq[0]:.2f}~{freq[-1]:.2f} GHz | Z0={z0_se:.1f}Ω (SE) / {2*z0_se:.1f}Ω (Diff)")
 
         pfx = f"{stem} " if multi_file else ""
         for k, fd in enumerate(fds):

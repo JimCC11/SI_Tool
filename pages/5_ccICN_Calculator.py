@@ -93,6 +93,57 @@ def _port_map_html(n_pairs: int, mapping: str) -> str:
     return "".join(rows)
 
 
+def _ccicn_params_ui() -> tuple:
+    """Render ccICN parameter section; return (a_nt_mv, sigma_x2, il_pre_db, il_post_db, fb_hz, tr_s)."""
+    st.divider()
+    st.subheader("ccICN 參數")
+
+    preset_name = st.selectbox("Preset", list(_PRESETS.keys()), key="ccicn_preset")
+    p = _PRESETS[preset_name]
+
+    fb_hz  = FB_GBAUD * 1e9
+    tr_s   = TR_PS * 1e-12
+    ft_ghz = 0.2365 / tr_s / 1e9
+    fr_ghz = 1.5 * (FB_GBAUD / 2)
+
+    _defaults = pd.DataFrame({
+        "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
+                      "Rise Time Tᵣ", "σ_x²", "IL_pre", "IL_post"],
+        "Value":     [FB_GBAUD, A_FT_MV, p["a_nt"],
+                      TR_PS, p["sigma_x2"], p["il_pre"], p["il_post"]],
+        "Unit":      ["GBaud", "mVpp", "mVpp", "ps", "–", "dB", "dB"],
+    })
+    _edited = st.data_editor(
+        _defaults, hide_index=True, use_container_width=True,
+        key=f"ccicn_params_{preset_name}",
+        disabled=["Parameter", "Unit"],
+        column_config={"Value": st.column_config.NumberColumn(label="Value", format="%.4g")},
+    )
+
+    a_nt_mv    = float(_edited.iloc[2]["Value"])
+    sigma_x2   = float(_edited.iloc[4]["Value"])
+    il_pre_db  = float(_edited.iloc[5]["Value"])
+    il_post_db = float(_edited.iloc[6]["Value"])
+
+    _td = "padding:4px 8px;border:1px solid #555;"
+    st.markdown(f"""
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:4px">
+  <tr>
+    <td style="{_td}">ft = 0.2365 / Tᵣ</td>
+    <td style="{_td};text-align:right;color:#555;">{ft_ghz:.2f}</td>
+    <td style="{_td};color:#888;">GHz</td>
+  </tr>
+  <tr>
+    <td style="{_td}">fr = 1.5 × Nyquist</td>
+    <td style="{_td};text-align:right;color:#555;">{fr_ghz:.2f}</td>
+    <td style="{_td};color:#888;">GHz</td>
+  </tr>
+</table>
+""", unsafe_allow_html=True)
+
+    return a_nt_mv, sigma_x2, il_pre_db, il_post_db, fb_hz, tr_s
+
+
 def _csv_col_names(csv_file) -> list:
     """Return column names for columns B onward (index 1+) from an uploaded CSV."""
     if csv_file is None:
@@ -149,6 +200,8 @@ with st.sidebar:
         elif uploaded_sp and n_pairs < 2:
             st.caption("需要 ≥ 2 差分對")
 
+        a_nt_mv, sigma_x2, il_pre_db, il_post_db, fb_hz, tr_s = _ccicn_params_ui()
+
         st.divider()
         st.subheader("Port Mapping")
         mapping_choice = st.radio("Port Mapping", ["Odd-Even", "N+1"], index=0,
@@ -181,56 +234,7 @@ with st.sidebar:
             "納入 Power Sum", _fx_cols, default=_fx_cols, key="ccicn_fx_csv_sel",
         ) if _fx_cols else []
 
-    # ════════════════════ ccICN 參數 (共用) ════════════════════
-    st.divider()
-    st.subheader("ccICN 參數")
-
-    preset_name = st.selectbox("Preset", list(_PRESETS.keys()), key="ccicn_preset")
-    p = _PRESETS[preset_name]
-
-    fb_hz  = FB_GBAUD * 1e9
-    tr_s   = TR_PS * 1e-12
-    ft_ghz = 0.2365 / tr_s / 1e9
-    fr_ghz = 1.5 * (FB_GBAUD / 2)
-
-    # Single unified table — reset on preset change via dynamic key
-    _defaults = pd.DataFrame({
-        "Parameter": ["Symbol Rate fb", "A_FT", "A_NT",
-                      "Rise Time Tᵣ", "σ_x²", "IL_pre", "IL_post"],
-        "Value":     [FB_GBAUD, A_FT_MV, p["a_nt"],
-                      TR_PS, p["sigma_x2"], p["il_pre"], p["il_post"]],
-        "Unit":      ["GBaud", "mVpp", "mVpp",
-                      "ps", "–", "dB", "dB"],
-    })
-    _edited = st.data_editor(
-        _defaults, hide_index=True, use_container_width=True,
-        key=f"ccicn_params_{preset_name}",
-        disabled=["Parameter", "Unit"],
-        column_config={
-            "Value": st.column_config.NumberColumn(label="Value", format="%.4g")
-        },
-    )
-
-    a_nt_mv    = float(_edited.iloc[2]["Value"])
-    sigma_x2   = float(_edited.iloc[4]["Value"])
-    il_pre_db  = float(_edited.iloc[5]["Value"])
-    il_post_db = float(_edited.iloc[6]["Value"])
-
-    _td = "padding:4px 8px;border:1px solid #555;"
-    st.markdown(f"""
-<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:4px">
-  <tr>
-    <td style="{_td}">ft = 0.2365 / Tᵣ</td>
-    <td style="{_td};text-align:right;color:#555;">{ft_ghz:.2f}</td>
-    <td style="{_td};color:#888;">GHz</td>
-  </tr>
-  <tr>
-    <td style="{_td}">fr = 1.5 × Nyquist</td>
-    <td style="{_td};text-align:right;color:#555;">{fr_ghz:.2f}</td>
-    <td style="{_td};color:#888;">GHz</td>
-  </tr>
-</table>
-""", unsafe_allow_html=True)
+        a_nt_mv, sigma_x2, il_pre_db, il_post_db, fb_hz, tr_s = _ccicn_params_ui()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -88,46 +88,6 @@ def _process_snp(tmp_path: str, n_pairs: int, mapping: str, rise_time_ps: float)
     return freq, fhz, s_mm, fd_list, td_list, z0_se
 
 
-def _victim_agg_ui(prefix: str, y_keys: tuple, n_pairs: int, tx_labels: list):
-    yk_min, yk_max, yk_step = y_keys
-    c1, c2, c3 = st.columns(3)
-    with c1: ymin  = st.number_input("Y min",  key=yk_min,  value=-80.0, step=10.0)
-    with c2: ymax  = st.number_input("Y max",  key=yk_max,  value=0.0,   step=10.0)
-    with c3: ystep = st.number_input("Y step", key=yk_step, value=20.0,  step=5.0, min_value=0.1)
-
-    if n_pairs < 2:
-        st.caption("需要 ≥ 2 對差分對才能計算")
-        return ymin, ymax, ystep, {}
-
-    n_key = f"{prefix}_n"
-    if n_key not in st.session_state:
-        st.session_state[n_key] = 1
-    n = st.session_state[n_key]
-
-    sel = {}
-    for i in range(n):
-        v_key, a_key = f"{prefix}_v{i}", f"{prefix}_a{i}"
-        is_last = (i == n - 1)
-        col_v = st.columns([3, 1, 1]) if is_last else (st.columns(1)[0],)
-
-        with (col_v[0] if is_last else col_v[0]):
-            cur_v = st.selectbox(f"Victim {i+1}", tx_labels, key=v_key)
-        if is_last:
-            with col_v[1]:
-                st.write("")
-                if n < n_pairs and st.button("＋", key=f"{prefix}_add"):
-                    st.session_state[n_key] += 1; st.rerun()
-            with col_v[2]:
-                st.write("")
-                if n > 1 and st.button("－", key=f"{prefix}_rm"):
-                    st.session_state[n_key] -= 1; st.rerun()
-
-        cur_k    = tx_labels.index(cur_v)
-        agg_opts = [tx_labels[m] for m in range(n_pairs) if m != cur_k]
-        chosen   = st.multiselect("Aggressors", agg_opts, default=agg_opts, key=a_key)
-        sel[cur_k] = {tx_labels.index(l) for l in chosen}
-
-    return ymin, ymax, ystep, sel
 
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -184,12 +144,37 @@ with st.sidebar:
     with rl_col2: show_sdd22 = st.checkbox("SDD22", value=True,  key="snp_s22")
 
     st.caption("PSNEXT")
-    psnext_ymin, psnext_ymax, psnext_ystep, psnext_sel = _victim_agg_ui(
-        "snp_nx", ("snp_nxn", "snp_nxx", "snp_nxs"), n_pairs, tx_labels)
+    nx1, nx2, nx3 = st.columns(3)
+    with nx1: psnext_ymin  = st.number_input("Y min",  key="snp_nxn", value=-80.0, step=10.0)
+    with nx2: psnext_ymax  = st.number_input("Y max",  key="snp_nxx", value=0.0,   step=10.0)
+    with nx3: psnext_ystep = st.number_input("Y step", key="snp_nxs", value=20.0,  step=5.0, min_value=0.1)
+    _mf = len(uploaded) > 1 if uploaded else False
+    if uploaded and n_pairs >= 2:
+        _nx_opts = [
+            (f"{fi+1}, Diff{2*v+1}, Diff{2*a+1}" if _mf else f"Diff{2*v+1}, Diff{2*a+1}")
+            for fi in range(len(uploaded))
+            for v in range(n_pairs)
+            for a in range(n_pairs) if a != v
+        ]
+        psnext_path_sel = st.multiselect("路徑", _nx_opts, default=_nx_opts, key="snp_nx_paths")
+    else:
+        psnext_path_sel = []
 
     st.caption("PSFEXT")
-    psfext_ymin, psfext_ymax, psfext_ystep, psfext_sel = _victim_agg_ui(
-        "snp_fx", ("snp_fxn2", "snp_fxx2", "snp_fxs2"), n_pairs, tx_labels)
+    fx1, fx2, fx3 = st.columns(3)
+    with fx1: psfext_ymin  = st.number_input("Y min",  key="snp_fxn2", value=-80.0, step=10.0)
+    with fx2: psfext_ymax  = st.number_input("Y max",  key="snp_fxx2", value=0.0,   step=10.0)
+    with fx3: psfext_ystep = st.number_input("Y step", key="snp_fxs2", value=20.0,  step=5.0, min_value=0.1)
+    if uploaded and n_pairs >= 2:
+        _fx_opts = [
+            (f"{fi+1}, Diff{2*v+2}, Diff{2*a+1}" if _mf else f"Diff{2*v+2}, Diff{2*a+1}")
+            for fi in range(len(uploaded))
+            for v in range(n_pairs)
+            for a in range(n_pairs) if a != v
+        ]
+        psfext_path_sel = st.multiselect("路徑", _fx_opts, default=_fx_opts, key="snp_fx_paths")
+    else:
+        psfext_path_sel = []
 
     st.caption("Mode Conversion")
     my1, my2, my3 = st.columns(3)
@@ -233,7 +218,7 @@ try:
     per_file_data = []
     info_lines    = []
 
-    for uf in uploaded:
+    for fi, uf in enumerate(uploaded):
         stem   = uf.name.rsplit(".", 1)[0]
         suffix = "." + uf.name.rsplit(".", 1)[-1]
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -260,38 +245,38 @@ try:
         if n_pairs >= 2:
             _all_psnext.extend([
                 {"freq": freq, "sdd21": s_mm[:, 4*v, 4*a],
-                 "label": f"{pfx}SDD{_diff_tx(a)}{_diff_tx(v)}", "_victim": v, "_agg": a, "_stem": stem}
+                 "label": (f"{fi+1}, Diff{_diff_tx(v)}, Diff{_diff_tx(a)}" if multi_file
+                           else f"Diff{_diff_tx(v)}, Diff{_diff_tx(a)}"),
+                 "_victim": v, "_agg": a, "_stem": stem, "_file_idx": fi}
                 for v in range(n_pairs) for a in range(n_pairs) if a != v
             ])
             _all_psfext.extend([
                 {"freq": freq, "sdd21": s_mm[:, 4*v+1, 4*a],
-                 "label": f"{pfx}SDD{_diff_tx(a)}{_diff_rx(v)}", "_victim": v, "_agg": a, "_stem": stem}
+                 "label": (f"{fi+1}, Diff{_diff_rx(v)}, Diff{_diff_tx(a)}" if multi_file
+                           else f"Diff{_diff_rx(v)}, Diff{_diff_tx(a)}"),
+                 "_victim": v, "_agg": a, "_stem": stem, "_file_idx": fi}
                 for v in range(n_pairs) for a in range(n_pairs) if a != v
             ])
 
     st.success(" | ".join(info_lines) + f" | {n_pairs} 對差分對")
 
-    psnext_fd = [ds for ds in _all_psnext if ds["_agg"] in psnext_sel.get(ds["_victim"], set())]
-    psfext_fd = [ds for ds in _all_psfext if ds["_agg"] in psfext_sel.get(ds["_victim"], set())]
+    psnext_fd = [ds for ds in _all_psnext if ds["label"] in psnext_path_sel]
+    psfext_fd = [ds for ds in _all_psfext if ds["label"] in psfext_path_sel]
 
-    def _per_victim_ps(all_ds, sel, label_fn):
-        stems  = list(dict.fromkeys(ds["_stem"] for ds in all_ds))
+    def _per_victim_ps(selected_ds, label_fn):
+        groups = {}
+        for ds in selected_ds:
+            groups.setdefault((ds["_file_idx"], ds["_victim"]), []).append(ds)
         result = []
-        for stem in stems:
-            pfx = f"{stem} " if multi_file else ""
-            for v, aggs in sorted(sel.items()):
-                if not aggs:
-                    continue
-                terms = [ds for ds in all_ds
-                         if ds["_victim"] == v and ds["_agg"] in aggs and ds["_stem"] == stem]
-                if terms:
-                    ps = np.sum([np.abs(ds["sdd21"])**2 for ds in terms], axis=0)
-                    result.append({"freq": terms[0]["freq"], "sdd21": np.sqrt(ps),
-                                   "label": f"{pfx}{label_fn(v)}"})
+        for (fi, v), terms in sorted(groups.items()):
+            ps  = np.sum([np.abs(ds["sdd21"])**2 for ds in terms], axis=0)
+            pfx = f"{fi+1}, " if multi_file else ""
+            result.append({"freq": terms[0]["freq"], "sdd21": np.sqrt(ps),
+                           "label": f"{pfx}{label_fn(v)}"})
         return result
 
-    psnext_ps = _per_victim_ps(_all_psnext, psnext_sel, lambda v: f"PSNEXT Diff{_diff_tx(v)}")
-    psfext_ps = _per_victim_ps(_all_psfext, psfext_sel, lambda v: f"PSFEXT Diff{_diff_rx(v)}")
+    psnext_ps = _per_victim_ps(psnext_fd, lambda v: f"PSNEXT Diff{_diff_tx(v)}")
+    psfext_ps = _per_victim_ps(psfext_fd, lambda v: f"PSFEXT Diff{_diff_rx(v)}")
 
     def _fig(f):
         f.update_layout(showlegend=show_legend)

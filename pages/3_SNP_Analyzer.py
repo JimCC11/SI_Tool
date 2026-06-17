@@ -167,7 +167,7 @@ with st.sidebar:
     with fx3: psfext_ystep = st.number_input("Y step", key="snp_fxs2", value=20.0,  step=5.0, min_value=0.1)
     if uploaded and n_pairs >= 2:
         _fx_opts = [
-            (f"{fi+1}, Diff{2*v+2}, Diff{2*a+1}" if _mf else f"Diff{2*v+2}, Diff{2*a+1}")
+            (f"{fi+1}, Diff{2*v+1}, Diff{2*a+2}" if _mf else f"Diff{2*v+1}, Diff{2*a+2}")
             for fi in range(len(uploaded))
             for v in range(n_pairs)
             for a in range(n_pairs) if a != v
@@ -252,8 +252,8 @@ try:
             ])
             _all_psfext.extend([
                 {"freq": freq, "sdd21": s_mm[:, 4*v+1, 4*a],
-                 "label": (f"{fi+1}, Diff{_diff_rx(v)}, Diff{_diff_tx(a)}" if multi_file
-                           else f"Diff{_diff_rx(v)}, Diff{_diff_tx(a)}"),
+                 "label": (f"{fi+1}, Diff{_diff_tx(v)}, Diff{_diff_rx(a)}" if multi_file
+                           else f"Diff{_diff_tx(v)}, Diff{_diff_rx(a)}"),
                  "_victim": v, "_agg": a, "_stem": stem, "_file_idx": fi}
                 for v in range(n_pairs) for a in range(n_pairs) if a != v
             ])
@@ -276,7 +276,7 @@ try:
         return result
 
     psnext_ps = _per_victim_ps(psnext_fd, lambda v: f"PSNEXT Diff{_diff_tx(v)}")
-    psfext_ps = _per_victim_ps(psfext_fd, lambda v: f"PSFEXT Diff{_diff_rx(v)}")
+    psfext_ps = _per_victim_ps(psfext_fd, lambda v: f"PSFEXT Diff{_diff_tx(v)}")
 
     def _fig(f):
         f.update_layout(showlegend=show_legend)
